@@ -1,0 +1,8 @@
+services:
+  drawio:
+    image: jgraph/drawio
+    container_name: drawio
+    ports:
+      - 8443:8443
+    mem_limit: ${CLASH_MEM_LIMIT:-64m}
+    restart: unless-stopped
