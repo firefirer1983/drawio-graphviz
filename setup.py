@@ -38,7 +38,7 @@ setup(
     python_requires='>=3.6',    
     install_requires=read_requirements("requirements.txt"),
     entry_points={
-        "console_scripts": ["json2xml = gvdraw.json2xml:main"]
+        "console_scripts": ["json2xml = gvdraw.json2xml:main", "trans2xml = gvdraw.trans2xml:main"],
     },
     extras_require={"test": read_requirements("requirements-test.txt")},
 )

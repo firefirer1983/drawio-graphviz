@@ -1,4 +1,4 @@
-<mxCell id="{{ cell_id }}" style="edgeStyle={{ edge_style }};rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
-  <mxGeometry relative="1" as="geometry" />
-</mxCell>
+        <mxCell id="{{ cell_id }}" style="edgeStyle={{ edge_style }};rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
 
