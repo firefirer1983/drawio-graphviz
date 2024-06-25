@@ -15,7 +15,8 @@ layout_factory = env.get_template("Layout.xml")
 node_factory = env.get_template("Node.xml")
 edge_factory = env.get_template("Edge.xml")
 
-POINT_TO_PIXEL = 1.33
+# POINT_TO_PIXEL = 1.33
+POINT_TO_PIXEL = 1.0
 DEFAULT_PADDING_SIZE = 4
 
 
@@ -94,6 +95,7 @@ def size2pixel(size: float) -> int:
     return int((size + 2 * DEFAULT_PADDING_SIZE) * POINT_TO_PIXEL)
 
 
+# Dots Per Inch    
 DEFAULT_DPI = 72
 
 
@@ -111,6 +113,7 @@ def unmarshal_xdot(xdot: dict) -> Layout:
     width, height = size2pixel(x_end - x_start), size2pixel(y_end - y_start)
     edges, nodes = [], {}
     for obj in xdot["objects"]:
+        
         x_pos, y_pos = (point2pixel(float(x)) for x in obj["pos"].split(","))
         cell_id = obj["_gvid"]
         label = obj.get("label",obj["name"]) # if no label fallback to name
