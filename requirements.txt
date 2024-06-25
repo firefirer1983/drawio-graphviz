@@ -1,5 +1,4 @@
 graphviz==0.20.3
--e git+ssh://git@github.com/firefirer1983/drawio-graphviz.git@705c51c552f2f82527e7b53acc775f98e2318e70#egg=gvdraw
 Jinja2==3.1.4
 MarkupSafe==2.1.5
 six==1.16.0
