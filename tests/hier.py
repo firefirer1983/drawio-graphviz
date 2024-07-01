@@ -1,15 +1,20 @@
 from transitions.extensions import HierarchicalGraphMachine
+from transitions.extensions.nesting import NestedState
 from argparse import ArgumentParser
-states = ['standing', 'walking', {'name': 'caffeinated', 'children':['dithering', 'running']}]
+
+NestedState.separator = "."
+
+states = [
+    {"name": 'A', "children": [{"name": "A1"}]},
+    {"name": 'B', "children": [{"name": "B1"}, {"name": "C", "children": [{"name": "C1"}, {"name": "C2"}]}]}    
+]
 transitions = [
-  ['walk', 'standing', 'walking'],
-  ['stop', 'walking', 'standing'],
-  ['walk', 'caffeinated_dithering', 'caffeinated_running'],
-  ['relax', 'caffeinated_running', 'standing'],
-  ['drink', 'walking', 'caffeinated_dithering']
+  ['next', 'A.A1', 'B.C.C1'],
+  ['next', 'B.C.C1', 'B.C.C2'],
+  ['next', 'B.C.C2', 'B.B1'],
 ]
 
-machine = HierarchicalGraphMachine(states=states, transitions=transitions, initial='standing', ignore_invalid_triggers=True)
+machine = HierarchicalGraphMachine(states=states, transitions=transitions, initial='A.A1', ignore_invalid_triggers=True)
 
 
 def main():

@@ -1,5 +1,6 @@
+import logging
 from typing import List, Optional, Union
-from dataclasses import fields, dataclass
+from dataclasses import field, fields, dataclass
 from jinja2 import Environment, FileSystemLoader
 
 DEFAULT_NODE_SHAPE = "ellipse"
@@ -67,6 +68,29 @@ class Cluster:
 
 
 @dataclass
+class TreeNode:
+    gvid: int
+    name: str
+    data: dict
+    children: List["TreeNode"] = field(default_factory=list)
+    
+    @property
+    def is_cluster(self) -> bool:
+        return self.name.startswith("cluster_") and not self.name.endswith("_root")
+
+
+def parse_tree_from(xdot: dict):
+    node_map = {obj["_gvid"]:
+        TreeNode(gvid=obj["_gvid"], name=obj["name"], data=obj, children=[])
+        for obj in xdot["objects"]
+    }
+    tree = []
+    for k, v in node_map.items():
+        if v.is_cluster:
+            v.children = [node_map[] for gvid in v.data[]]
+
+
+@dataclass
 class Edge:
     cell_id: str
     label: str
@@ -98,3 +122,10 @@ class Layout:
         params["nodes"] = "".join([node.render() for node in self.nodes])
         params["edges"] = "".join([edge.render() for edge in self.edges])
         return layout_factory.render(**params)
+
+
+@dataclass
+class State:
+    gvid: int
+    payload: dict
+    substates: List["State"] = field(default_factory=list)
