@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from dataclasses import field, fields, dataclass
 from jinja2 import Environment, FileSystemLoader
 
@@ -72,22 +72,53 @@ class TreeNode:
     gvid: int
     name: str
     data: dict
-    children: List["TreeNode"] = field(default_factory=list)
     
+    children: List["TreeNode"] = field(default_factory=list)
+    subgraphs: List[int] = field(default_factory=list)
+    nodes: List[int] = field(default_factory=list)
+
     @property
     def is_cluster(self) -> bool:
         return self.name.startswith("cluster_") and not self.name.endswith("_root")
 
+    @property
+    def is_cluster_root(self) -> bool:
+        return self.name.startswith("cluster_") and self.name.endswith("_root")
+
+    @property
+    def label(self):
+        if self.is_cluster:
+            _, name, *_ = self.name.split("_")
+            return name
+        return self.name
+
+
+def get_leaves(node: TreeNode) -> List[TreeNode]:
+    for graph in node.subgraphs:
+        pass
+    return []
+        
+
+def parse_subtree(node: TreeNode, nmap: Dict[int, TreeNode]) -> List[TreeNode]:
+    if node.subgraphs:
+        subgraphs = [parse_subtree(nmap[gvid], nmap) for gvid in node.subgraphs]
+    return subgraphs +  [nmap[gvid] for gvid in node.nodes]
+
 
 def parse_tree_from(xdot: dict):
-    node_map = {obj["_gvid"]:
-        TreeNode(gvid=obj["_gvid"], name=obj["name"], data=obj, children=[])
+    nodes = [
+        TreeNode(
+            gvid=obj["_gvid"],
+            name=obj["name"],
+            data=obj,
+            subgraphs=obj["subgraphs"],
+            nodes=obj["nodes"],
+        )
         for obj in xdot["objects"]
-    }
-    tree = []
-    for k, v in node_map.items():
-        if v.is_cluster:
-            v.children = [node_map[] for gvid in v.data[]]
+    ]
+    node_map = {n.gvid: n for n in nodes}
+    for node in nodes:
+        node.children = parse_subtree(node, node_map)
 
 
 @dataclass
