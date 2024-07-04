@@ -1,7 +1,9 @@
 from typing import Union
 
+# Dots Per Inch
+DEFAULT_DPI = 72
 
-DEFAULT_PADDING = 4
+DEFAULT_PADDING = 0
 
 
 def position_paddiing(pos: Union[str, float]) -> int:
@@ -16,7 +18,3 @@ def size_padding(size: Union[str, float]) -> int:
 
 def inch2pixel(size: Union[float, str]) -> int:
     return int(float(size) * DEFAULT_DPI)
-
-
-# Dots Per Inch
-DEFAULT_DPI = 72
