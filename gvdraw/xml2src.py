@@ -14,7 +14,6 @@ state_add_children_factory = env.get_template("StateAddChildren.tmpl")
 transition_factory = env.get_template("Transition.tmpl")
 
 
-
 def is_edge(obj: Element) -> bool:
     children = list(obj)
     if not children:
@@ -81,6 +80,10 @@ class XMLNode:
     def size(self):
         return self.width * self.height
 
+    @property
+    def substates(self) -> List[str]:
+        return [c.name for c in self.children]
+
     def __lt__(self, node: "XMLNode") -> bool:
         return self.size < node.size
 
@@ -97,13 +100,7 @@ class XMLNode:
     def __str__(self) -> str:
         return repr(self)
 
-    def unmarshal_state_instantiate(self) -> str:
-        return state_factory.render(name=self.name)
 
-    def unmarshal_add_children(self) -> str:
-        result = state_add_children_factory.render(name=self.name, children=[child.name for child in self.children])
-        return result
-        
 
 @dataclass
 class XMLEdge:
@@ -118,17 +115,23 @@ class XMLEdge:
         self.label = ""
 
 
+def unmarshal_states(nodes: List[XMLNode]) -> str:
+    template = env.get_template("State.tmpl")
+    return template.render(states=nodes)
+
+
 @dataclass
 class XMLLayout:
     xdata: InitVar[str]
     tree: List[XMLNode] = field(init=False)
     edges: List[XMLEdge] = field(init=False)
+    nodes: List[XMLNode] = field(init=False)
 
     def __post_init__(self, xdata: str):
         root = fromstring(xdata)
+        self.edges, self.nodes, self.tree = list(), list(), list()
+
         nodes = list()
-        self.edges = list()
-        self.tree = list()
         for obj in root.iter("object"):
             if is_vertex(obj):
                 nodes.append(XMLNode(obj))
@@ -137,8 +140,9 @@ class XMLLayout:
                 self.edges.append(XMLEdge(obj))
                 continue
             logging.warning(f"Unknown type element: {obj}")
-        nodes = sorted(nodes, key=lambda x: x)
 
+        # order by size => nodes
+        nodes = sorted(nodes, key=lambda x: x)
         while nodes:
             n = nodes.pop(0)
             for p in nodes:
@@ -150,20 +154,16 @@ class XMLLayout:
             else:
                 self.tree.append(n)
 
+        # BFS => self.nodes
         lifo = deque(self.tree)
         while lifo:
             state = lifo.popleft()
-            logging.info(f"{state.unmarshal_state_instantiate()}")
+            self.nodes.append(state)
             for child in state.children:
                 lifo.append(child)
 
-        lifo = deque(self.tree)
-        while lifo:
-            state = lifo.popleft()
-            if state.children:
-                logging.info(f"{state.unmarshal_add_children()}")
-            for child in state.children:
-                lifo.append(child)
+    def unmarshal(self):
+        return unmarshal_states(self.nodes)
 
 
 def main():
@@ -172,6 +172,7 @@ def main():
     args = parser.parse_args()
     with open(f"{args.src}", "r") as f:
         layout = XMLLayout(f.read())
+        logging.info(f"\n{layout.unmarshal()}")
 
 
 if __name__ == "__main__":

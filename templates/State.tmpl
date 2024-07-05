@@ -1,1 +1,14 @@
-{{ name }} = LabelNestedState(name=States.{{ name }})
+class States(StateEnum):
+{%- for state in states %}
+    {{ state.name }}: str = "{{ state.label }}"
+{%- endfor %}
+
+{% for state in states %}
+{{ state.name }} = LabelNestedState(name=States.{{ state.name }})
+{%- endfor %}
+
+{% for state in states %}
+{%- if state.children %}
+{% set substates = "[" + ", ".join(state.substates|map("string")) + "]" %}{{ state.name }}.add_substates({{ substates }}){% endif %}
+{%- endfor %}
+
