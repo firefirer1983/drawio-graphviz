@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-06-01T10:16:04.508Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" etag="xOkZffki02WM2AvE867o" version="24.4.13" type="device">
+  <diagram name="" id="gTNykQxMao-Qa-HrAj86">
+    <mxGraphModel dx="1372" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="333" pageHeight="435" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="nodes-layout" value="layout" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="333" height="435" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-0" value="A" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="12" y="8" width="202" height="83" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-2" value="B" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="8" y="124" width="317" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-4" value="C" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="16" y="155" width="194" height="162" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-7" value="A1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="51" y="18" width="61" height="43" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-9" value="B1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="132" y="342" width="54" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-11" value="C1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="51" y="168" width="54" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="nodes-12" value="C2" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="132" y="255" width="54" height="36" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edges-0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-7" target="nodes-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edges-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-11" target="nodes-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edges-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-12" target="nodes-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

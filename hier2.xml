@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-06-01T10:16:04.508Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" etag="xOkZffki02WM2AvE867o" version="24.4.13" type="device">
+  <diagram name="" id="gTNykQxMao-Qa-HrAj86">
+    <mxGraphModel dx="1372" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="340" pageHeight="504" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <object label="layout" name="layout" id="nodes-layout">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="0" y="0" width="340" height="504" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态A\l" name="A" id="nodes-0">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="16" y="85" width="202" height="75" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态B\l" name="B" id="nodes-2">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="8" y="193" width="324" height="280" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态C\l" name="C" id="nodes-4">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="16" y="224" width="201" height="162" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态A1\l" name="A1" id="nodes-7">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="55" y="98" width="61" height="36" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态B1\l" name="B1" id="nodes-9">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="132" y="411" width="60" height="36" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态C1\l" name="C1" id="nodes-11">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="55" y="237" width="60" height="36" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="状态C2\l" name="C2" id="nodes-12">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="132" y="324" width="60" height="36" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="Init\l" name="Init" id="nodes-13">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="55" y="-21" width="61" height="43" as="geometry" />
+          </mxCell>
+        </object>
+
+        <object label="next" id="edges-0">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-7" target="nodes-11">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="next" id="edges-1">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-11" target="nodes-12">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="next" id="edges-2">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-12" target="nodes-9">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="next" id="edges-3">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="nodes-13" target="nodes-7">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
