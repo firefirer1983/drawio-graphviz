@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 
 NestedState.separator = "."
 
+
 states = [
     {"name": 'A', "children": [{"name": "A1"}]},
     {"name": 'B', "children": [{"name": "B1"}, {"name": "C", "children": [{"name": "C1"}, {"name": "C2"}]}]}    

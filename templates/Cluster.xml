@@ -1,4 +1,6 @@
-        <mxCell id="{{ cell_id }}" value="{{ label }}" style="{{ shape }};whiteSpace=wrap;html=1;" vertex="1" parent="{{ parent }}">
-          <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
-        </mxCell>
-
+        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}">
+          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+            <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
+          </mxCell>
+        </object>
+        
