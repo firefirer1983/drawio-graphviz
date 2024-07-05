@@ -5,11 +5,6 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <object label="layout" name="layout" id="nodes-layout">
-          <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-            <mxGeometry x="0" y="0" width="340" height="504" as="geometry" />
-          </mxCell>
-        </object>
         <object label="状态A\l" name="A" id="nodes-0">
           <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
             <mxGeometry x="16" y="85" width="202" height="75" as="geometry" />

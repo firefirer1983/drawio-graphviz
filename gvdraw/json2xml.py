@@ -194,15 +194,15 @@ class Layout:
         self.x_pos, self.y_pos = 0, 0
 
         self.nodes = [
-            Cluster(
-                {
-                    "_gvid": "layout",
-                    "name": "layout",
-                    "bb": xdot["bb"],
-                    "label": "layout",
-                    "shape": "rectangle",
-                }
-            )
+            # Cluster(
+            #     {
+            #         "_gvid": "layout",
+            #         "name": "layout",
+            #         "bb": xdot["bb"],
+            #         "label": "layout",
+            #         "shape": "rectangle",
+            #     }
+            # )
         ]
 
         for obj in xdot["objects"]:

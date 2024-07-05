@@ -9,6 +9,14 @@ class States(StateEnum):
 
 {% for state in states %}
 {%- if state.children %}
-{% set substates = "[" + ", ".join(state.substates|map("string")) + "]" %}{{ state.name }}.add_substates({{ substates }}){% endif %}
+{% set substates = "[" + ", ".join(state.substates|map("string")) + "]" %}{{ state.name }}.add_substates({{ substates }})
+{%- endif %}
 {%- endfor %}
+
+rpa_states = [
+{%- for state in tree %}
+    State.{{ state.name }},
+{%- endfor %}
+]
+
 

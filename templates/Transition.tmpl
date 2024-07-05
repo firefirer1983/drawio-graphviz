@@ -1,0 +1,5 @@
+rpa_transitions = [
+{%- for edge in edges %}
+    Transition(source=States.{{ edge.source }} , dest=States.{{ edge.target }}),
+{%- endfor %}
+]
