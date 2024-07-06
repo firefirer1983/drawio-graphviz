@@ -1,4 +1,4 @@
-        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}">
+        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}" on_enter="{{ on_enter }}" on_exit="{{ on_exit }}">
           <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
             <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
           </mxCell>

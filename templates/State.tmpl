@@ -4,7 +4,15 @@ class States(StateEnum):
 {%- endfor %}
 
 {% for state in states %}
+{% if state.on_enter and state.on_exit %}
+{{ state.name }} = LabelNestedState(name=States.{{ state.name }}, on_enter={{ state.on_enter }}, on_exit={{ state.on_exit }})
+{% elif state.on_enter and not state.on_exit %}
+{{ state.name }} = LabelNestedState(name=States.{{ state.name }}, on_enter={{ state.on_enter }})
+{% elif not state.on_enter and state.on_exit %}
+{{ state.name }} = LabelNestedState(name=States.{{ state.name }}, on_exit={{ state.on_exit }})
+{% else %}
 {{ state.name }} = LabelNestedState(name=States.{{ state.name }})
+{% endif %}
 {%- endfor %}
 
 {% for state in states %}

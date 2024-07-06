@@ -117,12 +117,16 @@ class XMLEdge:
     source: str = field(init=False)
     target: str = field(init=False)
     conditions: List[str] = field(init=False)
+    unless: List[str] = field(init=False)
+
 
     def __post_init__(self, xdata: Element):
         self.label = xdata.get("label", "")
         mxcell = list(xdata)[0]
         self.source = mxcell.get("source", "")
         self.target = mxcell.get("target", "")
+        self.conditions = ast.literal_eval(xdata.get("conditions", "[]"))
+        self.unless = ast.literal_eval(xdata.get("unless", "[]"))
 
 
 def unmarshal_states(nodes: List[XMLNode], root: List[XMLNode]) -> str:

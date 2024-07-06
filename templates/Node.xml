@@ -1,6 +1,26 @@
+{% if on_enter and on_exit %}
+        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}" on_enter="{{ on_enter }}" on_exit="{{ on_exit }}">
+          <mxCell style="{{ shape }};whiteSpace=wrap;html=1;" vertex="1" parent="{{ parent }}">
+            <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
+          </mxCell>
+        </object>
+{% elif on_enter and not on_exit %}
+        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}" on_enter="{{ on_enter }}">
+          <mxCell style="{{ shape }};whiteSpace=wrap;html=1;" vertex="1" parent="{{ parent }}">
+            <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
+          </mxCell>
+        </object>
+{% elif not on_enter and on_exit %}
+        <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}"  on_exit="{{ on_exit }}">
+          <mxCell style="{{ shape }};whiteSpace=wrap;html=1;" vertex="1" parent="{{ parent }}">
+            <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
+          </mxCell>
+        </object>
+{% else %}
         <object label="{{ label }}" name="{{ name }}" id="{{ cell_id }}">
           <mxCell style="{{ shape }};whiteSpace=wrap;html=1;" vertex="1" parent="{{ parent }}">
             <mxGeometry x="{{ x_pos }}" y="{{ y_pos }}" width="{{ width }}" height="{{ height }}" as="geometry" />
           </mxCell>
         </object>
+{% endif %}
 

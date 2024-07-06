@@ -1,6 +1,27 @@
-        <object label="{{ label }}" id="{{ cell_id }}">
+{%- if conditions and unless %}
+        <object label="{{ label }}" id="{{ cell_id }}" conditions="{{ conditions }}" unless="{{ unless }}">
           <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
             <mxGeometry relative="1" as="geometry" />
           </mxCell>
         </object>
+{%- elif conditions and not unless %}
+        <object label="{{ label }}" id="{{ cell_id }}" conditions="{{ conditions }}">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+{%- elif not conditions and unless %}
+        <object label="{{ label }}" id="{{ cell_id }}" unless="{{ unless }}">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>
+{%- else %}
+        <object label="{{ label }}" id="{{ cell_id }}">
+          <mxCell style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;curved=1;" edge="1" parent="1" source="{{ source }}" target="{{ target }}">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </object>        
+{%- endif %}
+
 

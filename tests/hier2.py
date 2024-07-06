@@ -1,5 +1,5 @@
 from transitions.extensions import HierarchicalGraphMachine
-from transitions.extensions.nesting import NestedState
+from transitions.extensions.nesting import NestedState, NestedEventData
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List
 from argparse import ArgumentParser
@@ -22,6 +22,32 @@ class Transition:
     after: Optional[List[str]] = field(default_factory=list)
     before: Optional[List[str]] = field(default_factory=list)
     trigger: str = "next"
+
+
+class Model:
+    def on_enter_b1(self, event: NestedEventData):
+        pass
+
+    def on_exit_b1(self, event: NestedEventData):
+        pass
+
+    def is_c1(self, event: NestedEventData):
+        return True
+
+    def not_c1(self, event: NestedEventData):
+        return False
+
+    def on_enter_b1_again(self, event: NestedEventData):
+        pass
+
+    def on_exit_b1_again(self, event: NestedEventData):
+        pass
+
+    def is_c1_again(self, event: NestedEventData):
+        return True
+
+    def not_c1_again(self, event: NestedEventData):
+        return False
 
 
 class StateEnum(Enum, metaclass=EnumMeta):
@@ -58,6 +84,7 @@ class States(StateEnum):
     C1 = "状态C1"
     C2 = "状态C2"
 
+
 Init = LabelNestedState(name=States.Init)
 A1 = LabelNestedState(name=States.A1)
 A = LabelNestedState(name=States.A)
@@ -66,14 +93,23 @@ C1 = LabelNestedState(name=States.C1)
 C2 = LabelNestedState(name=States.C2)
 C = LabelNestedState(name=States.C)
 C.add_substates([C1, C2])
-B1 = LabelNestedState(name=States.B1)
+B1 = LabelNestedState(
+    name=States.B1,
+    on_enter=["on_enter_b1", "on_enter_b1_again"],
+    on_exit=["on_exit_b1", "on_exit_b1_again"],
+)
 B = LabelNestedState(name=States.B)
 B.add_substates([B1, C])
 
 
 transitions = [
     Transition(source=str(States.Init), dest=NS(States.A, States.A1)),
-    Transition(source=NS(States.A, States.A1), dest=NS(States.B, States.C, States.C1)),
+    Transition(
+        source=NS(States.A, States.A1),
+        dest=NS(States.B, States.C, States.C1),
+        conditions=["is_c1", "is_c1_agian"],
+        unless=["not_c1", "not_c1_again"],
+    ),
     Transition(
         source=NS(States.B, States.C, States.C1), dest=NS(States.B, States.C, States.C2)
     ),
@@ -82,9 +118,13 @@ transitions = [
 
 machine = HierarchicalGraphMachine(
     states=[A, B],
+    model=Model(),
     transitions=[asdict(t) for t in transitions],
     initial=States.Init,
+    use_pygraphviz=False,
     ignore_invalid_triggers=True,
+    show_conditions=True,
+    show_state_attributes=True,
 )
 
 
@@ -92,6 +132,7 @@ def main():
     model = machine.model
     model.get_graph().draw("hier2.json0", prog="dot")
     model.get_graph().draw("hier2.png", prog="dot")
+
 
 if __name__ == "__main__":
     main()

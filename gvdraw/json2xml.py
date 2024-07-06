@@ -2,15 +2,18 @@
 
 import argparse
 import logging
-from functools import partial
 import json
 from gvdraw.dpi import size_padding, position_paddiing, inch2pixel
 
 import logging
-from typing import List, Optional, Set, Union, Dict
+from typing import List, Optional, Set, Union, Dict, Tuple
 from dataclasses import InitVar, field, fields, dataclass, asdict
 from jinja2 import Environment, FileSystemLoader
 from gvdraw.dpi import size_padding, position_paddiing, inch2pixel
+
+
+def strip_label(label: str):
+    return label.strip().strip(NEWLINE).strip()
 
 
 NODE_GVID_OFFSET = 2
@@ -21,6 +24,10 @@ DEFAULT_CLUSTER_SHAPE = "rounded=0"
 DEFAULT_PARENT_NODE = "1"
 NODE_PREFIX = "nodes-"
 EDGE_PREFIX = "edges-"
+NEWLINE = "\\l"
+ENTER_TAG = "- enter:"
+EXIT_TAG = "- exit:"
+ON_CONNECTOR = "+"
 
 
 def node_cell_id_offset(cell_id: str) -> str:
@@ -38,6 +45,60 @@ edge_factory = env.get_template("Edge.xml")
 cluster_factory = env.get_template("Cluster.xml")
 
 
+@dataclass
+class StateLabel:
+    string: InitVar[str]
+    label: str = field(init=False)
+    on_enter: List[str] = field(init=False)
+    on_exit: List[str] = field(init=False)
+
+    def __post_init__(self, string: str):
+        self.label = strip_label(string)
+        self.on_enter, self.on_exit = list(), list()
+        on_enter_string = on_exit_string = ""
+        if EXIT_TAG in self.label:
+            self.label, on_exit_string = self.label.split(EXIT_TAG)
+            on_exit_string = strip_label(on_exit_string)
+            self.label = strip_label(self.label)
+            self.on_exit = [strip_label(f) for f in on_exit_string.split(ON_CONNECTOR) if f]
+
+        if ENTER_TAG in self.label:
+            self.label, on_enter_string = self.label.split(ENTER_TAG)
+            on_enter_string = strip_label(on_enter_string)
+            self.label = strip_label(self.label)
+            self.on_enter = [
+                strip_label(f) for f in on_enter_string.split(ON_CONNECTOR) if f
+            ]
+
+    def parse(self) -> Tuple[str, List[str], List[str]]:
+        return self.label, self.on_enter.copy(), self.on_exit.copy()
+
+
+@dataclass
+class TransitionLabel:
+    string: InitVar[str]
+    label: str = field(init=False)
+    conditions: List[str] = field(init=False)
+    unless: List[str] = field(init=False)
+
+    def __post_init__(self, string: str):
+        if " " not in string:
+            self.label, self.conditions, self.unless = string, list(), list()
+            return
+        self.label, left = string.split(" ", 1)
+        self.conditions, self.unless = list(), list()
+        left = left.strip().strip("[").strip("]").strip()
+        parts = [part.strip() for part in left.split("&")]
+        for part in parts:
+            if "!" in part:
+                self.unless.append(part.strip("!"))
+                continue
+            self.conditions.append(part.strip("!"))
+
+    def parse(self) -> Tuple[str, List[str], List[str]]:
+        return self.label, self.conditions.copy(), self.unless.copy()
+
+
 def is_cluster(name: str):
     return name and name.startswith("cluster_")
 
@@ -46,15 +107,16 @@ def is_cluster_root(name: str):
     return is_cluster(name) and name.endswith("_root")
 
 
-def label2state(label: str) -> str:
-    _lab = label
-    logging.info(f"label: {label}")
-    if is_cluster_root(label):
-        label, _ = label.split("_root")
-    if is_cluster(label):
-        _, label = label.split("cluster_")
-    *_, state = label.split(STATE_SEP)
-    # logging.info(f"label2state: {_lab} => {state}")
+def sanitize_statename(name: str) -> str:
+    name = name.strip().strip(NEWLINE)
+    _name = name
+    logging.info(f"name: {name}")
+    if is_cluster_root(name):
+        name, _ = name.split("_root")
+    if is_cluster(name):
+        _, name = name.split("cluster_")
+    *_, state = name.split(STATE_SEP)
+    # logging.info(f"statename: {_name} => {state}")
     return state
 
 
@@ -70,6 +132,8 @@ class Node:
     width: float = field(init=False)
     shape: str = field(init=False)
     parent: str = DEFAULT_PARENT_NODE
+    on_enter: List[str] = field(init=False)
+    on_exit: List[str] = field(init=False)
 
     def __post_init__(self, xdot):
         x_, y_ = xdot["pos"].split(",")
@@ -78,8 +142,8 @@ class Node:
         self.cell_id = NODE_PREFIX + str(xdot["_gvid"])
         self.width = inch2pixel(xdot["width"])
         self.height = inch2pixel(xdot["height"])
-        self.name = label2state(xdot["name"])
-        self.label = label2state(xdot["label"])
+        self.name = sanitize_statename(xdot["name"])
+        self.label, self.on_enter, self.on_exit = StateLabel(xdot["label"]).parse()
         self.shape = (
             DEFAULT_NODE_SHAPE
             if xdot.get("shape", "retangle") == "rectangle"
@@ -91,7 +155,8 @@ class Node:
         return self
 
     def render(self) -> str:
-        return node_factory.render(**asdict(self))
+        attrs = asdict(self)
+        return node_factory.render(**attrs)
 
     @property
     def is_cluster(self) -> bool:
@@ -119,8 +184,8 @@ class Cluster(Node):
         self.x_pos = position_paddiing(x_start)
         self.y_pos = position_paddiing(y_start)
         self.cell_id = NODE_PREFIX + str(xdot["_gvid"])
-        self.name = label2state(xdot["name"])
-        self.label = label2state(xdot["label"])
+        self.name = sanitize_statename(xdot["name"])
+        self.label, self.on_enter, self.on_exit = StateLabel(xdot["label"]).parse()
 
     def vflip(self, vcanvas: float):
         self.y_pos = vcanvas - (self.y_pos + self.height)
@@ -160,13 +225,17 @@ class Edge:
     label: str = field(init=False)
     source: str = field(init=False)
     target: str = field(init=False)
+    conditions: List[str] = field(init=False)
+    unless: List[str] = field(init=False)
     edge_style: str = "orthogonalEdgeStyle"
 
     def __post_init__(self, xdot):
         self.cell_id = EDGE_PREFIX + str(xdot["_gvid"])
         self.source = NODE_PREFIX + str(xdot["tail"])
         self.target = NODE_PREFIX + str(xdot["head"])
-        self.label = xdot.get("label", xdot.get("name", ""))
+        self.label, self.conditions, self.unless = TransitionLabel(
+            xdot["label"]
+        ).parse()
 
     def render(self) -> str:
         return edge_factory.render(**asdict(self))
