@@ -60,7 +60,9 @@ class StateLabel:
             self.label, on_exit_string = self.label.split(EXIT_TAG)
             on_exit_string = strip_label(on_exit_string)
             self.label = strip_label(self.label)
-            self.on_exit = [strip_label(f) for f in on_exit_string.split(ON_CONNECTOR) if f]
+            self.on_exit = [
+                strip_label(f) for f in on_exit_string.split(ON_CONNECTOR) if f
+            ]
 
         if ENTER_TAG in self.label:
             self.label, on_enter_string = self.label.split(ENTER_TAG)
@@ -262,18 +264,6 @@ class Layout:
         )
         self.x_pos, self.y_pos = 0, 0
 
-        self.nodes = [
-            # Cluster(
-            #     {
-            #         "_gvid": "layout",
-            #         "name": "layout",
-            #         "bb": xdot["bb"],
-            #         "label": "layout",
-            #         "shape": "rectangle",
-            #     }
-            # )
-        ]
-
         for obj in xdot["objects"]:
             node = obj2node(obj)
             if node.is_cluster_root or node.is_point:
@@ -300,6 +290,28 @@ class State:
     gvid: int
     payload: dict
     substates: List["State"] = field(default_factory=list)
+
+
+def draw2json(machine, filename: str):
+    model = machine.model
+    machine.show_conditions = False
+    machine.show_state_attributes = False
+    model.get_graph().draw(f"{filename}.json0", prog="dot")
+    model.get_graph().draw(f"{filename}.png", prog="dot")
+    machine.show_conditions = True
+    machine.show_state_attributes = True
+    model.get_graph().draw(f".{filename}.json0", prog="dot")
+    with open(f"{filename}.json0", "r+") as t:
+        with open(f".{filename}.json0", "r") as f:
+            target = json.loads(t.read())
+            label = json.loads(f.read())
+            for dest, src in zip(target["objects"], label["objects"]):
+                dest["label"] = src["label"]
+            for dest, src in zip(target["edges"], label["edges"]):
+                dest["label"] = src["label"]
+        t.seek(0)
+        t.truncate(0)
+        t.write(json.dumps(target, indent=4))
 
 
 def main():

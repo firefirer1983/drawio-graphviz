@@ -1,5 +1,5 @@
 rpa_transitions = [
-{%- for edge in edges %}
+{%- for edge in edges -%}
 {%- if edge.conditions and edge.unless %}
     Transition(source=States.{{ edge.source }} , dest=States.{{ edge.target }}, conditions={{ edge.conditions }}, unless={{ edge.unless }}),
 {%- elif edge.conditions and not edge.unless %}
@@ -8,6 +8,6 @@ rpa_transitions = [
     Transition(source=States.{{ edge.source }} , dest=States.{{ edge.target }}, unless={{ edge.unless }}),
 {%- else %}    
     Transition(source=States.{{ edge.source }} , dest=States.{{ edge.target }}),
-{% endif %}
+{%- endif %}
 {%- endfor %}
 ]

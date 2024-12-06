@@ -1,3 +1,4 @@
+import json
 from transitions.extensions import HierarchicalGraphMachine
 from transitions.extensions.nesting import NestedState, NestedEventData
 from dataclasses import dataclass, field, asdict
@@ -128,10 +129,31 @@ machine = HierarchicalGraphMachine(
 )
 
 
-def main():
+def draw2json(machine, filename: str):
+    import pprint
     model = machine.model
-    model.get_graph().draw("hier2.json0", prog="dot")
-    model.get_graph().draw("hier2.png", prog="dot")
+    machine.show_conditions = False
+    machine.show_state_attributes = False
+    model.get_graph().draw(f"{filename}.json0", prog="dot")
+    model.get_graph().draw(f"{filename}.png", prog="dot")
+    machine.show_conditions = True
+    machine.show_state_attributes = True
+    model.get_graph().draw(f".{filename}.json0", prog="dot")
+    with open(f"{filename}.json0", "r+") as t:
+        with open(f".{filename}.json0", "r") as f:
+            target = json.loads(t.read())
+            label = json.loads(f.read())
+            for dest, src in zip(target["objects"], label["objects"]):
+                dest["label"] = src["label"]
+            for dest, src in zip(target["edges"], label["edges"]):
+                dest["label"] = src["label"]
+        t.seek(0)
+        t.truncate(0)
+        t.write(json.dumps(target, indent=4))
+
+
+def main():
+    draw2json(machine, "hier2")
 
 
 if __name__ == "__main__":
