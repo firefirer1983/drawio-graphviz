@@ -5,7 +5,7 @@ from io import StringIO
 from functools import wraps
 from dataclasses import dataclass
 from collections import defaultdict, deque
-from typing import Callable, Deque, Generator, Optional, List, Tuple, Any, Dict
+from typing import Callable, Deque, Generator, Optional, List, Tuple, Any, Dict, Set
 
 # from tkinter import *
 import tkinter as tk
@@ -42,6 +42,8 @@ class Transition:
     line_id: int
     source_port: Port
     target_port: Port
+    conditions: Set[str] = set()
+    unless: Set[str] = set()
 
     def __repr__(self) -> str:
         return f"{self.line_id} @ {self.source_port} -> {self.target_port}"
@@ -62,26 +64,39 @@ class Transition:
         popup.title("Multi-input Dialog")
 
         # 使用 grid 布局管理器
-        for i in range(3):  # 设置3行
+        for i in range(4):  # 设置3行
             popup.grid_rowconfigure(i, weight=1)
         for i in range(2):  # 设置2列
             popup.grid_columnconfigure(i, weight=1)
 
         # 第一个输入框标签和输入框
-        label1 = tk.Label(popup, text="on_enters:")
-        label1.grid(row=0, column=0, sticky=tk.W, padx=10, pady=(10, 0))
+        label1 = tk.Label(popup, text="Conditions:")
+        label1.grid(row=1, column=0, sticky=tk.W, padx=10, pady=(10, 0))
 
-        on_enter_entry = tk.Entry(popup)
-        on_enter_entry.grid(row=1, column=0, columnspan=2, sticky=tk.EW, padx=10)
+        conditions_entry = tk.Entry(popup)
+        conditions_entry.grid(row=1, column=0, columnspan=2, sticky=tk.EW, padx=10)
+
+        label2 = tk.Label(popup, text="Unless:")
+        label2.grid(row=2, column=0, sticky=tk.W, padx=10, pady=(10, 0))
+
+        unless_entry = tk.Entry(popup)
+        unless_entry.grid(row=2, column=0, columnspan=2, sticky=tk.EW, padx=10)
 
         # 添加提交按钮
         def submit():
-            on_enter_entries = on_enter_entry.get()
-            logger.info(f"OnEnter: {on_enter_entries}")
+            conditions_entries = conditions_entry.get()
+            logger.info(f"Conditions: {conditions_entries}")
+            for s in conditions_entries.split(","):
+                self.conditions.add(s)
+            unless_entries = unless_entry.get()
+            logger.info(f"Unless: {unless_entries}")
+            for s in unless_entries.split(","):
+                self.unless.add(s)
+
             popup.destroy()  # 关闭弹出框
 
         submit_button = tk.Button(popup, text="确认", command=submit)
-        submit_button.grid(row=3, column=0, columnspan=2, pady=10)
+        submit_button.grid(row=4, column=0, columnspan=2, pady=10)
 
     def on_release(self, event):
         logger.info(f"{self.line_id} release!")
@@ -187,6 +202,8 @@ class Node(Region):
         self.children: List[Node] = list()
         self.title_id: Optional[int] = None
         self.ports: List[int] = list()
+        self.on_enter: Set[str] = set()
+        self.on_exit: Set[str] = set()
 
         n = self.tag_id // len(tags)
         l = self.tag_id % len(tags)
@@ -224,16 +241,22 @@ class Node(Region):
     def clone(self) -> "Node":
         return Node(self.x, self.y, self.width, self.height, self.tag_id)
 
+    def add_on_enter(self, func: str):
+        self.on_enter.add(func)
+
+    def add_on_exit(self, func: str):
+        self.on_exit.add(func)
+
     @property
     def label(self) -> str:
         return self.unique_id
-    
+
     @label.setter
     def label(self, value):
         # need to double check
         self.unique_id = value
-        
-        
+
+
 @dataclass
 class RuntimeEnv:
     root: tk.Tk
@@ -627,13 +650,13 @@ class DFSVisitor:
     def visit(self, node: Node):
         visit_method = f"visit_{node.__class__.__name__}".lower()
         visitor = getattr(self, visit_method, NotImplementVisitor())
-        q = Deque([node])
+        q: Deque[Node] = deque([node])
         while q:
             n = q.pop()
             visitor(n)
             for c in n.children:
                 q.append(c)
-                
+
         # for child in node.children:
         #     self.visit(child)
         # visitor(node)
@@ -642,8 +665,8 @@ class DFSVisitor:
 class BFSVisitor:
     def visit(self, node: Node):
         visit_method = f"visit_{node.__class__.__name__}".lower()
-        visitor = getattr(self, visit_method, NotImplementVisitor())    
-        q = Deque([node])
+        visitor = getattr(self, visit_method, NotImplementVisitor())
+        q: Deque[Node] = deque([node])
         while q:
             n = q.popleft()
             visitor(n)
