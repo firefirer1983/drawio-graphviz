@@ -627,17 +627,26 @@ class DFSVisitor:
     def visit(self, node: Node):
         visit_method = f"visit_{node.__class__.__name__}".lower()
         visitor = getattr(self, visit_method, NotImplementVisitor())
-        for child in node.children:
-            self.visit(child)
-        visitor(node)
+        q = Deque([node])
+        while q:
+            n = q.pop()
+            visitor(n)
+            for c in n.children:
+                q.append(c)
+                
+        # for child in node.children:
+        #     self.visit(child)
+        # visitor(node)
 
 
 class BFSVisitor:
     def visit(self, node: Node):
+        visit_method = f"visit_{node.__class__.__name__}".lower()
+        visitor = getattr(self, visit_method, NotImplementVisitor())    
         q = Deque([node])
         while q:
             n = q.popleft()
-            self.visit(n)
+            visitor(n)
             for c in n.children:
                 q.append(c)
 
