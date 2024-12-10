@@ -1,11 +1,20 @@
+import json
+import click
 from abc import abstractmethod
+import pprint
 import logging
 import textwrap
 from io import StringIO
-from functools import wraps
-from dataclasses import dataclass
+from functools import wraps, partial
+from dataclasses import dataclass, field
 from collections import defaultdict, deque
 from typing import Callable, Deque, Generator, Optional, List, Tuple, Any, Dict, Set
+
+from transitions.extensions import HierarchicalGraphMachine
+from transitions.extensions.nesting import NestedState
+from gvdraw.dpi import json_dapi72to96
+from graphviz import dot
+import graphviz
 
 # from tkinter import *
 import tkinter as tk
@@ -19,6 +28,11 @@ logger = logging.getLogger(__name__)
 hint_box: Optional[int] = None
 
 CHILD_SEP = "."
+
+
+@click.group
+class cli:
+    pass
 
 
 @dataclass
@@ -39,19 +53,30 @@ class Port:
 
 @dataclass
 class Transition:
-    line_id: int
     source_port: Port
     target_port: Port
-    conditions: Set[str] = set()
-    unless: Set[str] = set()
+    conditions: Set[str] = field(default_factory=set)
+    unless: Set[str] = field(default_factory=set)
+    widget: Optional["TransitionWidget"] = None
 
     def __repr__(self) -> str:
-        return f"{self.line_id} @ {self.source_port} -> {self.target_port}"
+        return f"{self.source_port} -> {self.target_port}"
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Transition):
-            return self.line_id == other.line_id
+            return (
+                self.source_port == other.source_port
+                and self.target_port == other.target_port
+            )
         return False
+
+    @property
+    def source(self) -> str:
+        return self.source_port.node.label
+
+    @property
+    def dest(self) -> str:
+        return self.target_port.node.label
 
     def start_at(self, node: "Node"):
         return self.source_port.node == node
@@ -59,7 +84,66 @@ class Transition:
     def end_at(self, node: "Node"):
         return self.target_port.node == node
 
-    def on_click(self, event):
+    def draw(self):
+        if not self.widget:
+            logger.warning(f"Transtion未关联任何UI Widge")
+            return
+        self.widget.draw(self.source_port.pos, self.target_port.pos)
+
+
+transition_registry: List[Transition] = list()
+
+
+class TransitionWidget:
+    def __init__(self, tx: Transition):
+        self.tx = tx
+        self.tx.widget = self
+        self.line_id: Optional[int] = None
+        self.arrow_id: Optional[int] = None
+
+    def draw(self, start: Pos, end: Pos):
+        x, y = end
+        if self.line_id:
+            runtime.canvas.delete(self.line_id)
+        if self.arrow_id:
+            runtime.canvas.delete(self.arrow_id)
+
+        self.line_id = runtime.canvas.create_line(*start, *end, fill="black", width=2)
+
+        # self.arrow_id = runtime.canvas.create_polygon(
+        #     x,
+        #     y,
+        #     x - ARROW_WIDTH,
+        #     y - ARROW_HEIGHT,
+        #     x + ARROW_WIDTH,
+        #     y - ARROW_HEIGHT,
+        #     fill="black",
+        #     width=2,
+        # )
+        self.arrow_id = runtime.canvas.create_oval(
+            x - PORT_RADIUS,
+            y - PORT_RADIUS,
+            x + PORT_RADIUS,
+            y + PORT_RADIUS,
+            fill="black",
+            width=2,
+        )
+        runtime.canvas.tag_bind(self.line_id, "<ButtonPress-1>", self.on_click_btn1)
+        runtime.canvas.tag_bind(self.line_id, "<ButtonRelease-1>", self.on_release_btn1)
+
+        runtime.canvas.tag_bind(self.line_id, "<ButtonPress-3>", self.on_click_btn3)
+        runtime.canvas.tag_bind(self.line_id, "<ButtonRelease-3>", self.on_release_btn3)
+
+    def on_click_btn1(self, event):
+        logger.info(f"TransitionWidget on click btn1")
+        return "break"
+
+    def on_release_btn1(self, event):
+        logger.info(f"TransitionWidget on release btn1")
+        return "break"
+
+    def on_click_btn3(self, event):
+        logger.info(f"TransitionWidget on click btn3")
         popup = tk.Toplevel(runtime.canvas)
         popup.title("Multi-input Dialog")
 
@@ -87,28 +171,43 @@ class Transition:
             conditions_entries = conditions_entry.get()
             logger.info(f"Conditions: {conditions_entries}")
             for s in conditions_entries.split(","):
-                self.conditions.add(s)
+                self.tx.conditions.add(s)
             unless_entries = unless_entry.get()
             logger.info(f"Unless: {unless_entries}")
             for s in unless_entries.split(","):
-                self.unless.add(s)
-
+                self.tx.unless.add(s)
             popup.destroy()  # 关闭弹出框
 
         submit_button = tk.Button(popup, text="确认", command=submit)
         submit_button.grid(row=4, column=0, columnspan=2, pady=10)
+        return "break"
 
-    def on_release(self, event):
-        logger.info(f"{self.line_id} release!")
+    def on_release_btn3(self, event):
+        logger.info(f"TransitionWidget on release btn3")
+        logger.info(f"{self.tx} on release btn3")
+        return "break"
 
 
-transition_registry: List[Transition] = list()
+class NodeEventHandler:
+    def __init__(self, node: "Node"):
+        self.node = node
+
+    def on_click_btn1(self, event):
+        pass
+
+    def on_release_btn1(self, event):
+        pass
+
+    def on_click_btn3(self, event):
+        pass
+
+    def on_release_btn3(self, event):
+        pass
 
 
-def register_transition(
-    line_id: int, source_port: Port, target_port: Port
-) -> Transition:
-    tx = Transition(line_id, source_port, target_port)
+def register_transition(source_port: Port, target_port: Port) -> Transition:
+    tx = Transition(source_port, target_port)
+    tx.widget = TransitionWidget(tx)
     logger.info(f"ADD {tx}")
     transition_registry.append(tx)
     return tx
@@ -255,6 +354,10 @@ class Node(Region):
     def label(self, value):
         # need to double check
         self.unique_id = value
+
+    @property
+    def is_root(self) -> bool:
+        return self.parent is None
 
 
 @dataclass
@@ -472,7 +575,7 @@ event_registry = defaultdict()
 
 class EventRegistry:
     def __init_subclass__(cls) -> None:
-        edit, *_ = cls.__name__.split("EventHandler")
+        edit, *_ = cls.__name__.split("CanvasHandler")
         edit = edit.lower()
         handler = cls()
         logger.info(f"registry[{edit}] = {cls.__name__}")
@@ -482,7 +585,7 @@ class EventRegistry:
         mp.pos = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
 
 
-class MovingEventHandler(EventRegistry):
+class MovingCanvasHandler(EventRegistry):
     def on_move(self, event):
         pass
 
@@ -510,7 +613,7 @@ class MovingEventHandler(EventRegistry):
         return
 
 
-class DrawEventHandler(EventRegistry):
+class DrawCanvasHandler(EventRegistry):
     def on_click(self, event):
         mp.pos = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
 
@@ -534,6 +637,7 @@ class DrawEventHandler(EventRegistry):
             return
 
         width, height = x - mp.x, y - mp.y
+
         tag_id = runtime.canvas.create_rectangle(
             (*mp.pos, x, y), fill="", outline="black"
         )
@@ -558,7 +662,7 @@ class DrawEventHandler(EventRegistry):
         LabelVisitor().visit(node)
 
 
-class TransitionEventHandler(EventRegistry):
+class TransitionCanvasHandler(EventRegistry):
     def on_click(self, event):
         x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
         port = get_select_port(x, y)
@@ -580,12 +684,8 @@ class TransitionEventHandler(EventRegistry):
             logger.warning(f"未选中任何 target node")
             return
         runtime.target_port, pos = port, port.pos
-        line_id = runtime.canvas.create_line(*mp.pos, *pos, fill="black", width=2)
-        tx = register_transition(line_id, runtime.source_port, runtime.target_port)
-
-        runtime.canvas.tag_bind(line_id, "<ButtonPress-3>", tx.on_click)
-        runtime.canvas.tag_bind(line_id, "<ButtonRelease-3>", tx.on_release)
-
+        tx = register_transition(runtime.source_port, runtime.target_port)
+        tx.draw()
         runtime.source_port = runtime.target_port = None
         mp.pos = pos
 
@@ -596,7 +696,7 @@ class TransitionEventHandler(EventRegistry):
         runtime.line = runtime.canvas.create_line(*mp.pos, x, y, fill="yellow", width=2)
 
 
-class AttrEventHandler(EventRegistry):
+class AttrCanvasHandler(EventRegistry):
     def on_click(self, event):
         mp.pos = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
         elements = [_ for _ in runtime.canvas.find_all()]
@@ -735,31 +835,13 @@ class OffsetVisitor(DFSVisitor):
         node.y += int(self.voffset)
         runtime.canvas.coords(node.tag_id, node.left, node.top, node.right, node.bottom)
         for tx in transition_registry:
-            EdgeOffsetVisitor(node).visit_edge(tx)
+            if tx.start_at(node) or tx.end_at(node):
+                tx.draw()
         LabelVisitor().visit_node(node)
 
 
-class EdgeOffsetVisitor:
-    def __init__(self, node):
-        self.node = node
-
-    def visit_edge(self, tx: Transition):
-        if tx.start_at(self.node):
-            logger.info(f"{tx} Start At Redraw!")
-            runtime.canvas.delete(tx.line_id)
-            start_at = tx.source_port.pos
-            end_at = tx.target_port.pos
-            tx.line_id = runtime.canvas.create_line(
-                *start_at, *end_at, fill="black", width=2
-            )
-        elif tx.end_at(self.node):
-            runtime.canvas.delete(tx.line_id)
-            start_at = tx.target_port.pos
-            end_at = tx.source_port.pos
-            tx.line_id = runtime.canvas.create_line(
-                *start_at, *end_at, fill="black", width=2
-            )
-            logger.info(f"{tx} End At Redraw!")
+ARROW_WIDTH = 3
+ARROW_HEIGHT = 8
 
 
 class StateEnumExporter(BFSVisitor):
@@ -795,6 +877,94 @@ def get_select_port(x: int, y: int) -> Optional[Port]:
             return n
 
     return _select_port(runtime.tree)
+
+
+class DotVisitor(BFSVisitor):
+    def __init__(self):
+        self.dot = graphviz.Digraph("sketchpad", format="json0")
+        self.dot.node_attr["shape"] = "box"
+
+    def visit_node(self, node: Node):
+        self.dot.node(node.label, node.label)
+
+
+@dataclass
+class DotNode:
+    _gvid: int
+    width: int
+    height: int
+    label: str
+    name: str
+    pos: Tuple[int, int]
+    shape: str
+
+    @property
+    def parents(self) -> List[str]:
+        return []
+
+
+@dataclass
+class DotEdge:
+    _gvid: int
+    head: int
+    tail: int
+    pos: List[int]
+
+
+class LayoutVisitor:
+    def __init__(self, layout: dict):
+        self.layout = layout
+        self.nodes = [DotNode(**obj) for obj in layout["objects"]]
+        self.edges = [DotEdge(**edge) for edge in layout["edges"]]
+
+
+class MiddleWareVisitor:
+    from transitions.extensions.nesting import NestedState
+    from transitions.extensions.diagrams import HierarchicalGraphMachine
+
+    def __init__(self) -> None:
+        self.states = list()
+        self.transitions = list()
+        self.visit(runtime.tree)
+        self.visit_transition()
+        self.machine = HierarchicalGraphMachine(
+            states=self.states,
+            show_conditions=True,
+            show_state_attributes=True,
+            use_pygraphviz=False,
+            transitions=self.transitions,
+        )
+
+    def visit(self, node: Node, parent: Optional[NestedState] = None):
+        for child in node.children:
+            state = NestedState(
+                child.label, on_enter=list(child.on_enter), on_exit=list(child.on_exit)
+            )
+            if parent:
+                parent.add_substate(state)
+            else:
+                self.states.append(state)
+            self.visit(child, state)
+
+    def visit_transition(self):
+        for tx in transition_registry:
+            self.transitions.append(
+                dict(
+                    source=tx.source,
+                    dest=tx.dest,
+                    conditions=tx.conditions,
+                    unless=tx.unless,
+                    trigger="next",
+                )
+            )
+
+    def layout(self) -> dict:
+        graph = self.machine.get_graph()
+        graph.attr(rankdir="TB")  # 设置方向为从上到下
+        result = graph.draw(None, prog="dot", format="json0")
+        layout = json.loads(result.decode("utf8"))
+        pprint.pprint(layout)
+        return layout
 
 
 class PortVisitor(DFSVisitor):
@@ -841,7 +1011,20 @@ def prepare_layout(env: RuntimeEnv):
     ExportButton(env.canvas, 2 * BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
 
 
-prepare_layout(runtime)
+@cli.command
+def start():
+    prepare_layout(runtime)
+    runtime.run()
 
 
-runtime.run()
+@cli.command
+@click.argument("filename", type=str)
+def import_json(filename: str):
+    with open(filename, "utf8") as f:
+        dat = f.read()
+        dotfile = json_dapi72to96(json.loads(dat))
+        logger.info(f"Import : {filename}: \n {dotfile}")
+
+
+if __name__ == "__main__":
+    cli()
