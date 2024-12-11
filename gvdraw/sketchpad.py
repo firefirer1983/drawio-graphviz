@@ -188,9 +188,45 @@ class TransitionWidget:
         return "break"
 
 
-class NodeEventHandler:
+class NodeWidget:
     def __init__(self, node: "Node"):
         self.node = node
+        self.tag_id = runtime.canvas.create_rectangle(
+            (self.node.left, self.node.top, self.node.right, self.node.bottom),
+            fill="",
+            outline="black",
+        )
+        self.label_id = runtime.canvas.create_text(
+            node.x + NODE_LABEL_X_OFFSET,
+            node.y + NODE_LABEL_Y_OFFSET,
+            text=node.label,
+            font=("Arial", 10, "bold"),
+        )
+
+    def draw(self):
+        if self.tag_id:
+            runtime.canvas.delete(self.tag_id)
+        self.tag_id = runtime.canvas.create_rectangle(
+            (self.node.left, self.node.top, self.node.right, self.node.bottom),
+            fill="",
+            outline="black",
+        )
+
+    def label(self):
+        if self.label_id:
+            runtime.canvas.delete(self.tag_id)
+        # while parent:
+        #     if parent is runtime.tree:
+        #         break
+        #     label = f"{parent.label}" + CHILD_SEP + f"{label}"
+        #     parent = parent.parent
+        #     logger.info(f"parent: {parent}")
+        self.label_id = runtime.canvas.create_text(
+            self.node.x + NODE_LABEL_X_OFFSET,
+            self.node.y + NODE_LABEL_Y_OFFSET,
+            text=self.node.label,
+            font=("Arial", 10, "bold"),
+        )
 
     def on_click_btn1(self, event):
         pass
@@ -283,20 +319,21 @@ class Region:
         return repr(self)
 
 
-tags = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+UNIQUE_CODES = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 class Node(Region):
+    sequence_id = 0
+
     def __init__(
         self,
         x: int,
         y: int,
         width: int,
         height: int,
-        tag_id: int,
     ):
         super().__init__(x, y, width, height)
-        self.tag_id = tag_id
+        self.widget: Optional[NodeWidget] = None
         self.parent: Optional[Node] = None
         self.children: List[Node] = list()
         self.title_id: Optional[int] = None
@@ -304,14 +341,28 @@ class Node(Region):
         self.on_enter: Set[str] = set()
         self.on_exit: Set[str] = set()
 
-        n = self.tag_id // len(tags)
-        l = self.tag_id % len(tags)
-        self.unique_id = tags[l]
+        n = Node.sequence_id // len(UNIQUE_CODES)
+        l = Node.sequence_id % len(UNIQUE_CODES)
+        self.unique_id = UNIQUE_CODES[l]
         while n:
-            n = n // len(tags)
-            l = n % len(tags)
-            self.unique_id += tags[l]
-        logger.info(f"LABEL: {self.tag_id} => {self.unique_id}")
+            n = n // len(UNIQUE_CODES)
+            l = n % len(UNIQUE_CODES)
+            self.unique_id += UNIQUE_CODES[l]
+
+        Node.sequence_id += 1
+        logger.info(f"UNIQUE ID: {self.unique_id}")
+
+    @property
+    def tag_id(self) -> int:
+        if self.widget:
+            return self.widget.tag_id
+        raise RuntimeError
+
+    def draw(self) -> NodeWidget:
+        if not self.widget:
+            self.widget = NodeWidget(self)
+            self.widget.draw()
+        return self.widget
 
     def add_child(self, child: "Node"):
         if child in self.children:
@@ -329,7 +380,7 @@ class Node(Region):
         )
 
     def __repr__(self) -> str:
-        return f"Node_{self.tag_id} <({self.x},{self.y}) {self.width}x{self.height}>"
+        return f"Node <({self.x},{self.y}) {self.width}x{self.height}>"
 
     def get_region(self) -> Region:
         return Region(self.x, self.y, self.width, self.height)
@@ -338,7 +389,7 @@ class Node(Region):
         return super().offset(hoffset, voffset)
 
     def clone(self) -> "Node":
-        return Node(self.x, self.y, self.width, self.height, self.tag_id)
+        return Node(self.x, self.y, self.width, self.height)
 
     def add_on_enter(self, func: str):
         self.on_enter.add(func)
@@ -391,7 +442,7 @@ def prepare_runtime():
     h.grid(column=0, row=1, sticky=(tk.W, tk.E))
     v.grid(column=1, row=0, sticky=(tk.N, tk.S))
 
-    return RuntimeEnv(root, canvas, Node(0, 0, 1920, 1080, 0))
+    return RuntimeEnv(root, canvas, Node(0, 0, 1920, 1080))
 
 
 runtime = prepare_runtime()
@@ -609,6 +660,7 @@ class MovingCanvasHandler(EventRegistry):
                 return
         node.parent.remove_child(node)
         parent.add_child(node)
+
         OffsetVisitor(hoffset, voffset).visit(node)
         return
 
@@ -637,11 +689,7 @@ class DrawCanvasHandler(EventRegistry):
             return
 
         width, height = x - mp.x, y - mp.y
-
-        tag_id = runtime.canvas.create_rectangle(
-            (*mp.pos, x, y), fill="", outline="black"
-        )
-        node = Node(*mp.pos, width, height, tag_id)
+        node = Node(*mp.pos, width, height)
         logger.info(f"[NEW]: {node}")
 
         parent = get_parent(node)
@@ -651,8 +699,8 @@ class DrawCanvasHandler(EventRegistry):
                 if node == c:
                     continue
                 logger.warning(f"检测到碰撞! {node} and {c}")
-                runtime.canvas.delete(tag_id)
                 return
+        node.draw()
         parent.add_child(node)
         # 修正node的sibling的父子关系
         for c in parent.children:
@@ -792,12 +840,12 @@ class LabelVisitor(DFSVisitor):
 
         parent = node.parent
         label = f"{node.label}"
-        while parent:
-            if parent is runtime.tree:
-                break
-            label = f"{parent.label}" + CHILD_SEP + f"{label}"
-            parent = parent.parent
-            logger.info(f"parent: {parent}")
+        # while parent:
+        #     if parent is runtime.tree:
+        #         break
+        #     label = f"{parent.label}" + CHILD_SEP + f"{label}"
+        #     parent = parent.parent
+        #     logger.info(f"parent: {parent}")
 
         node.title_id = runtime.canvas.create_text(
             node.x + NODE_LABEL_X_OFFSET,
@@ -833,7 +881,7 @@ class OffsetVisitor(DFSVisitor):
     def visit_node(self, node: Node):
         node.x += int(self.hoffset)
         node.y += int(self.voffset)
-        runtime.canvas.coords(node.tag_id, node.left, node.top, node.right, node.bottom)
+        node.draw()
         for tx in transition_registry:
             if tx.start_at(node) or tx.end_at(node):
                 tx.draw()
@@ -891,13 +939,27 @@ class DotVisitor(BFSVisitor):
 @dataclass
 class DotNode:
     _gvid: int
-    width: int
-    height: int
     label: str
     name: str
-    pos: Tuple[int, int]
-    shape: str
-
+    color: str = ""
+    fillcolor: str = ""
+    style: str = ""
+    pos: Tuple[int, int] = field(default_factory=tuple)
+    width: int = 0
+    height: int = 0
+    bb: List[int] = field(default_factory=list)
+    shape: str = ""
+    directed: str = ""
+    lp: str = ""
+    lwidth: str = ""
+    lheight: str = ""
+    peripheries: str = ""
+    nodes: List[int] = field(default_factory=list)
+    rankdir: str = ""
+    strict: str = ""
+    rank: str = ""
+    subgraphs: List[int] = field(default_factory=list)
+    edges: List[int] = field(default_factory=list)
     @property
     def parents(self) -> List[str]:
         return []
@@ -909,16 +971,25 @@ class DotEdge:
     head: int
     tail: int
     pos: List[int]
-
-
-class LayoutVisitor:
-    def __init__(self, layout: dict):
+    color: str = ""
+    label: str = ""
+    lhead: str = ""
+    ltail: str = ""
+    lp: str = ""
+    tail_lp: str = ""
+    head_lp: str = ""
+    taillabel: str = ""
+    headlabel: str = ""
+    
+    
+class LayoutImportVisitor:
+    def __init__(self, layout: dict, sep: str = "."):
         self.layout = layout
         self.nodes = [DotNode(**obj) for obj in layout["objects"]]
         self.edges = [DotEdge(**edge) for edge in layout["edges"]]
 
 
-class MiddleWareVisitor:
+class LayoutExportVisitor:
     from transitions.extensions.nesting import NestedState
     from transitions.extensions.diagrams import HierarchicalGraphMachine
 
@@ -1020,10 +1091,17 @@ def start():
 @cli.command
 @click.argument("filename", type=str)
 def import_json(filename: str):
-    with open(filename, "utf8") as f:
+    import pprint
+
+    with open(filename, "r", encoding="utf8") as f:
         dat = f.read()
         dotfile = json_dapi72to96(json.loads(dat))
-        logger.info(f"Import : {filename}: \n {dotfile}")
+        logger.info(f"Import : {filename}: \n ")
+        pprint.pprint(dotfile)
+
+    visitor = LayoutImportVisitor(dotfile)
+    for n in visitor.nodes:
+        pass
 
 
 if __name__ == "__main__":
