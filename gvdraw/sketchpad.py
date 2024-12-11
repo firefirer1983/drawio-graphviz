@@ -6,13 +6,26 @@ import logging
 import textwrap
 from io import StringIO
 from functools import wraps, partial
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from collections import defaultdict, deque
-from typing import Callable, Deque, Generator, Optional, List, Tuple, Any, Dict, Set
+from gvdraw.dpi import dpi72todpi96, array72todpi96, inch2pixel
+from typing import (
+    Callable,
+    Deque,
+    Generator,
+    Optional,
+    List,
+    Tuple,
+    Any,
+    Dict,
+    Set,
+    Union,
+    Type,
+)
 
 from transitions.extensions import HierarchicalGraphMachine
 from transitions.extensions.nesting import NestedState
-from gvdraw.dpi import json_dapi72to96
+from gvdraw.dpi import dpi72todpi96
 from graphviz import dot
 import graphviz
 
@@ -936,52 +949,114 @@ class DotVisitor(BFSVisitor):
         self.dot.node(node.label, node.label)
 
 
+def get_node_type(
+    n: dict,
+) -> Union[Type["Cluster"], Type["ClusterRoot"], Type["DotNode"]]:
+    if n.get("solid"):
+        return Cluster
+    elif n.get("name", "").endswith("_root"):
+        return ClusterRoot
+    else:
+        return DotNode
+
+
+@dataclass
+class Cluster:
+    _gvid: int = field(init=False)
+    bb: List[int] = field(init=False)
+    color: str = field(init=False)
+    directed: str = field(init=False)
+    label: str = field(init=False)
+    name: str = field(init=False)
+    fillcolor: str = field(init=False)
+    style: str = field(init=False)
+    rank: str = field(init=False)
+    rankdir: str = field(init=False)
+    lp: int = field(init=False)
+    lwidth: int = field(init=False)
+    lheight: int = field(init=False)
+    strict: str = field(init=False)
+    edges: List[int] = field(init=False)
+    nodes: List[int] = field(init=False)
+    subgraphs: List[int] = field(init=False)
+    dotobj: InitVar[dict]
+
+    def __post_init__(self, dotobj: dict):
+        pass
+
+
+@dataclass
+class ClusterRoot:
+    bb: List[int] = field(init=False)
+    color: str = field(init=False)
+    directed: str = field(init=False)
+    edges: List[int] = field(init=False)
+    fillcolor: str = field(init=False)
+    label: str = field(init=False)
+    name: str = field(init=False)
+    nodes: List[int] = field(init=False)
+    rank: str = field(init=False)
+    rankdir: str = field(init=False)
+    strict: str = field(init=False)
+    style: str = field(init=False)
+    compound: str = field(init=False)
+    dotobj: InitVar[dict]
+
+    def __post_init__(self, dotobj: dict):
+        pass
+
+
 @dataclass
 class DotNode:
-    _gvid: int
-    label: str
-    name: str
-    color: str = ""
-    fillcolor: str = ""
-    style: str = ""
-    pos: Tuple[int, int] = field(default_factory=tuple)
-    width: int = 0
-    height: int = 0
-    bb: List[int] = field(default_factory=list)
-    shape: str = ""
-    directed: str = ""
-    lp: str = ""
-    lwidth: str = ""
-    lheight: str = ""
-    peripheries: str = ""
-    nodes: List[int] = field(default_factory=list)
-    rankdir: str = ""
-    strict: str = ""
-    rank: str = ""
-    subgraphs: List[int] = field(default_factory=list)
-    edges: List[int] = field(default_factory=list)
-    @property
-    def parents(self) -> List[str]:
-        return []
+    _gvid: int = field(init=False)
+    label: str = field(init=False)
+    name: str = field(init=False)
+    color: str = field(init=False)
+    fillcolor: str = field(init=False)
+    style: str = field(init=False)
+    pos: List[int] = field(init=False)
+    width: int = field(init=False)
+    height: int = field(init=False)
+    shape: str = field(init=False)
+    peripheries: str = field(init=False)
+
+    dotobj: InitVar[dict]
+
+    def __post_init__(self, dotobj: dict):
+        self._gvid = int(dotobj["_gvid"])
+        self.label = dotobj["label"]
+        self.name = dotobj["name"]
+        self.color = dotobj["color"]
+        self.fillcolor = dotobj["fillcolor"]
+        self.style = dotobj["style"]
+        self.pos = array72todpi96(dotobj["pos"])
+        self.width = inch2pixel(dotobj["width"])
+        self.height = inch2pixel(dotobj["height"])
+        
 
 
 @dataclass
 class DotEdge:
-    _gvid: int
-    head: int
-    tail: int
-    pos: List[int]
-    color: str = ""
-    label: str = ""
-    lhead: str = ""
-    ltail: str = ""
-    lp: str = ""
-    tail_lp: str = ""
-    head_lp: str = ""
-    taillabel: str = ""
-    headlabel: str = ""
+    _gvid: int = field(init=False)
+    head: int = field(init=False)
+    tail: int = field(init=False)
+    pos: List[int] = field(init=False)
+    color: str = field(init=False)
+    label: str = field(init=False)
+    lhead: str = field(init=False)
+    ltail: str = field(init=False)
+    lp: str = field(init=False)
+    tail_lp: str = field(init=False)
+    head_lp: str = field(init=False)
+    taillabel: str = field(init=False)
+    headlabel: str = field(init=False)
     
-    
+    dotobj: InitVar[dict]
+
+    def __post_init__(self, dotobj: dict):
+        pass
+
+
 class LayoutImportVisitor:
     def __init__(self, layout: dict, sep: str = "."):
         self.layout = layout
