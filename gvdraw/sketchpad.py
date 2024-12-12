@@ -8,7 +8,7 @@ from io import StringIO
 from functools import wraps, partial
 from dataclasses import InitVar, dataclass, field
 from collections import defaultdict, deque
-from gvdraw.dpi import dpi72todpi96, array72todpi96, inch2pixel
+from gvdraw.dpi import dpi72todpi96, array72todpi96, inch2pixel, tuples72todpi96, tuple72todpi96
 from typing import (
     Callable,
     Deque,
@@ -209,6 +209,7 @@ class NodeWidget:
             fill="",
             outline="black",
         )
+        logger.info(f"[NODE] ({self.node.left}, {self.node.top}) {self.node.right - self.node.left}x{self.node.bottom - self.node.top}")
         self.label_id = runtime.canvas.create_text(
             node.x + NODE_LABEL_X_OFFSET,
             node.y + NODE_LABEL_Y_OFFSET,
@@ -224,16 +225,11 @@ class NodeWidget:
             fill="",
             outline="black",
         )
+        self.label()
 
     def label(self):
         if self.label_id:
-            runtime.canvas.delete(self.tag_id)
-        # while parent:
-        #     if parent is runtime.tree:
-        #         break
-        #     label = f"{parent.label}" + CHILD_SEP + f"{label}"
-        #     parent = parent.parent
-        #     logger.info(f"parent: {parent}")
+            runtime.canvas.delete(self.label_id)
         self.label_id = runtime.canvas.create_text(
             self.node.x + NODE_LABEL_X_OFFSET,
             self.node.y + NODE_LABEL_Y_OFFSET,
@@ -372,9 +368,10 @@ class Node(Region):
         raise RuntimeError
 
     def draw(self) -> NodeWidget:
-        if not self.widget:
-            self.widget = NodeWidget(self)
+        if self.widget:
             self.widget.draw()
+        else:
+            self.widget = NodeWidget(self)
         return self.widget
 
     def add_child(self, child: "Node"):
@@ -949,13 +946,14 @@ class DotVisitor(BFSVisitor):
         self.dot.node(node.label, node.label)
 
 
-def get_node_type(
+def get_dotnode_type(
     n: dict,
 ) -> Union[Type["Cluster"], Type["ClusterRoot"], Type["DotNode"]]:
-    if n.get("solid"):
-        return Cluster
-    elif n.get("name", "").endswith("_root"):
+    name: str = n["name"]
+    if name.startswith("cluster_") and name.endswith("_root"):
         return ClusterRoot
+    elif name.startswith("cluster_"):
+        return Cluster
     else:
         return DotNode
 
@@ -965,45 +963,80 @@ class Cluster:
     _gvid: int = field(init=False)
     bb: List[int] = field(init=False)
     color: str = field(init=False)
-    directed: str = field(init=False)
+    directed: bool = field(init=False)
     label: str = field(init=False)
     name: str = field(init=False)
     fillcolor: str = field(init=False)
     style: str = field(init=False)
     rank: str = field(init=False)
     rankdir: str = field(init=False)
-    lp: int = field(init=False)
+    lp: List[int] = field(init=False)
     lwidth: int = field(init=False)
     lheight: int = field(init=False)
-    strict: str = field(init=False)
+    strict: bool = field(init=False)
+    nodesep: int = field(init=False)
+    compound: bool = field(init=False)
     edges: List[int] = field(init=False)
     nodes: List[int] = field(init=False)
     subgraphs: List[int] = field(init=False)
+    
     dotobj: InitVar[dict]
 
     def __post_init__(self, dotobj: dict):
-        pass
+        self._gvid = dotobj["_gvid"]
+        self.bb = array72todpi96(dotobj["bb"])
+        self.color = dotobj["color"]
+        self.label = dotobj.get("label", "")
+        self.style = dotobj.get("style", "")
+        self.name = dotobj.get("name", "")
+        self.fillcolor = dotobj["fillcolor"]
+        self.compound = bool(dotobj.get("compound") == "true")
+        self.directed = bool(dotobj.get("directed") == "true")
+        self.lheight = inch2pixel(dotobj["lheight"])
+        self.lwidth = inch2pixel(dotobj["lwidth"])
+        self.lp = array72todpi96(dotobj["lp"])
+        self.nodesep = inch2pixel(dotobj.get("nodesep", 0))
+        self.rank = dotobj["rank"]
+        self.rankdir = dotobj["rankdir"]
+        self.strict = bool(dotobj["strict"] == "true")
+        self.edges = dotobj.get("edges", [])
+        self.nodes = dotobj.get("nodes", [])
+        self.subgraphs = dotobj.get("subgraphs", [])
 
 
 @dataclass
 class ClusterRoot:
+    _gvid: int = field(init=False)
     bb: List[int] = field(init=False)
     color: str = field(init=False)
-    directed: str = field(init=False)
-    edges: List[int] = field(init=False)
+    directed: bool = field(init=False)
     fillcolor: str = field(init=False)
     label: str = field(init=False)
+    nodesep: int = field(init=False)
     name: str = field(init=False)
     nodes: List[int] = field(init=False)
     rank: str = field(init=False)
     rankdir: str = field(init=False)
     strict: str = field(init=False)
     style: str = field(init=False)
-    compound: str = field(init=False)
+    compound: bool = field(init=False)
     dotobj: InitVar[dict]
 
     def __post_init__(self, dotobj: dict):
-        pass
+        self._gvid = dotobj["_gvid"]
+        self.name = dotobj["name"]
+        self.bb = array72todpi96(dotobj["bb"])
+        self.color = dotobj["color"]
+        self.compound = bool(dotobj.get("compound") == "true")
+        self.directed = bool(dotobj.get("directed") == "true")
+        self.fillcolor = dotobj["fillcolor"]
+        self.label = dotobj["label"]
+        self.nodesep = inch2pixel(dotobj.get("nodesep", 0))
+        self.rank = dotobj["rank"]
+        self.rankdir = dotobj["rankdir"]
+        self.strict = dotobj["strict"]
+        self.style = dotobj["style"]
+        self.nodes = dotobj["nodes"]
 
 
 @dataclass
@@ -1014,7 +1047,7 @@ class DotNode:
     color: str = field(init=False)
     fillcolor: str = field(init=False)
     style: str = field(init=False)
-    pos: List[int] = field(init=False)
+    pos: Pos = field(init=False)
     width: int = field(init=False)
     height: int = field(init=False)
     shape: str = field(init=False)
@@ -1024,15 +1057,16 @@ class DotNode:
 
     def __post_init__(self, dotobj: dict):
         self._gvid = int(dotobj["_gvid"])
-        self.label = dotobj["label"]
         self.name = dotobj["name"]
         self.color = dotobj["color"]
         self.fillcolor = dotobj["fillcolor"]
-        self.style = dotobj["style"]
-        self.pos = array72todpi96(dotobj["pos"])
-        self.width = inch2pixel(dotobj["width"])
         self.height = inch2pixel(dotobj["height"])
-        
+        self.label = dotobj["label"]
+        self.peripheries = dotobj["peripheries"]
+        self.pos: Pos = tuple72todpi96(dotobj["pos"])
+        self.shape = dotobj["shape"]
+        self.style = dotobj.get("style", "")
+        self.width = inch2pixel(dotobj["width"])
 
 
 @dataclass
@@ -1040,28 +1074,91 @@ class DotEdge:
     _gvid: int = field(init=False)
     head: int = field(init=False)
     tail: int = field(init=False)
-    pos: List[int] = field(init=False)
+    pos: List[Pos] = field(init=False)
     color: str = field(init=False)
     label: str = field(init=False)
     lhead: str = field(init=False)
     ltail: str = field(init=False)
-    lp: str = field(init=False)
+    lp: List[int] = field(init=False)
     tail_lp: str = field(init=False)
     head_lp: str = field(init=False)
     taillabel: str = field(init=False)
     headlabel: str = field(init=False)
-    
+
     dotobj: InitVar[dict]
 
     def __post_init__(self, dotobj: dict):
-        pass
+        self._gvid = dotobj["_gvid"]
+        self.tail = dotobj["tail"]
+        self.head = dotobj["head"]
+        self.color = dotobj["color"]
+        self.label = dotobj["label"]
+        self.lp = array72todpi96(dotobj["lp"])
+        self.pos = tuples72todpi96(dotobj["pos"])
+        self.lhead = dotobj.get("lhead", "")
+        self.ltail = dotobj.get("ltail", "")
+        self.tail_lp = dotobj.get("tail_lp", "")
+        self.head_lp = dotobj.get("head_lp", "")
+        self.taillabel = dotobj.get("taillabel", "")
+        self.headlabel = dotobj.get("headlabel", "")
 
+
+@dataclass
+class DotLayout:
+    name: str =  field(init=False)
+    directed: bool =  field(init=False)
+    strict: bool = field(init=False)
+    bb: List[int] = field(init=False)
+    color: str =  field(init=False)
+    compound: bool =  field(init=False)
+    directed: bool =  field(init=False)
+    fillcolor: str = field(init=False)
+    label: str =  field(init=False)
+    lheight: int = field(init=False)
+    lp: List[int] = field(init=False)
+    lwidth: int =  field(init=False)
+    nodesep: int =  field(init=False)
+    # rank: str =  field(init=False)
+    rankdir: str =  field(init=False)
+    strict: bool = field(init=False)
+    style: str =  field(init=False)
+    _subgraph_cnt: int =  field(init=False)
+    objects: List[Union[Cluster, ClusterRoot, DotNode]] = field(init=False)
+    edges: List[DotEdge] = field(init=False)
+
+    dotobj: InitVar[dict]
+
+    def __post_init__(self, dotobj: dict):
+        self.name = dotobj["name"]
+        self.directed = bool(dotobj.get("directed") == "true")
+        self.compound = bool(dotobj.get("compound") == "true")
+        self.strict = bool(dotobj.get("strict") == "true")
+        self.bb = array72todpi96(dotobj["bb"])
+        self.color = dotobj["color"]
+        self.fillcolor = dotobj["fillcolor"]
+        self.label = dotobj["label"]
+        # self.rank = dotobj["rank"]
+        self.rankdir = dotobj["rankdir"]
+        self.nodesep = dotobj.get("nodesep", 0)
+        self.style = dotobj["style"]
+        self.lp = array72todpi96(dotobj["lp"])
+        self.lwidth = inch2pixel(dotobj["lwidth"])
+        self.lheight = inch2pixel(dotobj["lheight"])
+        self._subgraph_cnt = dotobj["_subgraph_cnt"]
+        self.objects = []
+        
+        for obj in dotobj["objects"]:
+            objtype = get_dotnode_type(obj)
+            self.objects.append(objtype(obj))
+            
+        self.edges = [DotEdge(edg) for edg in dotobj["edges"]]
+    
 
 class LayoutImportVisitor:
     def __init__(self, layout: dict, sep: str = "."):
-        self.layout = layout
-        self.nodes = [DotNode(**obj) for obj in layout["objects"]]
-        self.edges = [DotEdge(**edge) for edge in layout["edges"]]
+        self.layout = DotLayout(layout)
+        self.nodes = self.layout.objects
+        self.edges = self.layout.edges
 
 
 class LayoutExportVisitor:
@@ -1167,17 +1264,44 @@ def start():
 @click.argument("filename", type=str)
 def import_json(filename: str):
     import pprint
-
+    prepare_layout(runtime)
+    
     with open(filename, "r", encoding="utf8") as f:
         dat = f.read()
-        dotfile = json_dapi72to96(json.loads(dat))
+        dotfile = json.loads(dat)
         logger.info(f"Import : {filename}: \n ")
-        pprint.pprint(dotfile)
+    pprint.pprint(dotfile)
 
     visitor = LayoutImportVisitor(dotfile)
-    for n in visitor.nodes:
-        pass
-
+    for dotnode in visitor.nodes:
+        if isinstance(dotnode, Cluster):
+            x0, y0, x1, y1 = dotnode.bb
+            width, height = x1 -x0, y1 - y0
+            node = Node(x0, y0, width, height)
+            _, node.label = dotnode.name.split("cluster_")
+            node.draw()
+            parent = get_parent(node)
+            parent.add_child(node)
+        elif isinstance(dotnode, DotNode) and dotnode.shape == "point":
+            logger.info(f"IGNORE: {dotnode}")
+        elif isinstance(dotnode, DotNode):
+            width, height = dotnode.width, dotnode.height
+            cx, cy = dotnode.pos
+            x0, y0 = cx - width//2, cy - height // 2
+            logger.info(f"{dotnode.name}: ({x0},{y0}) {width}x{height}")
+            node = Node(x0, y0, width, height)
+            node.label = dotnode.name
+            node.draw()
+            parent = get_parent(node)
+            parent.add_child(node)
+        else:
+            logger.warning(f"无法处理的节点: {dotnode}")
+            
+        
+    # for e in visitor.edges:
+    #     print(e)
+    
+    runtime.run()
 
 if __name__ == "__main__":
     cli()

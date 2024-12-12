@@ -87,38 +87,15 @@ class States(StateEnum):
 
 
 Init = LabelNestedState(name=States.Init)
-A1 = LabelNestedState(name=States.A1)
 A = LabelNestedState(name=States.A)
-A.add_substates([A1])
-C1 = LabelNestedState(name=States.C1)
-C2 = LabelNestedState(name=States.C2)
-C = LabelNestedState(name=States.C)
-C.add_substates([C1, C2])
-B1 = LabelNestedState(
-    name=States.B1,
-    on_enter=["on_enter_b1", "on_enter_b1_again"],
-    on_exit=["on_exit_b1", "on_exit_b1_again"],
-)
-B = LabelNestedState(name=States.B)
-B.add_substates([B1, C])
 
 
 transitions = [
-    Transition(source=str(States.Init), dest=NS(States.A, States.A1)),
-    Transition(
-        source=NS(States.A, States.A1),
-        dest=NS(States.B, States.C, States.C1),
-        conditions=["is_c1", "is_c1_agian"],
-        unless=["not_c1", "not_c1_again"],
-    ),
-    Transition(
-        source=NS(States.B, States.C, States.C1), dest=NS(States.B, States.C, States.C2)
-    ),
-    Transition(source=NS(States.B, States.C, States.C2), dest=NS(States.B, States.B1)),
+    Transition(source=str(States.Init), dest=str(States.A)),
 ]
 
 machine = HierarchicalGraphMachine(
-    states=[A, B],
+    states=[A],
     model=Model(),
     transitions=[asdict(t) for t in transitions],
     initial=States.Init,
@@ -139,13 +116,15 @@ def draw2json(machine, filename: str):
 
     graph = model.get_graph()
     graph.attr(rankdir="BT")
+    graph.node_attr["shape"] = "box"
+    breakpoint()
     graph.draw(f"{filename}.json0", prog="dot")
     graph.draw(f"{filename}.png", prog="dot")
     
 
 
 def main():
-    draw2json(machine, "hier2")
+    draw2json(machine, "sizing")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 import logging
-from typing import TypeVar, Union, List
+from typing import TypeVar, Union, List, Tuple
 logger = logging.getLogger(__name__)
 
 # Dots Per Inch
@@ -26,13 +26,33 @@ def inch2pixel(size: Union[float, str]) -> int:
 def dpi72todpi96(pixels: str) -> int:
     return int(pixels) * 4 // 3
     
+
+def tuples72todpi96(tuples: str) -> List[Tuple[int, int]]:
+    result = list()
+    for pos in tuples.split(","):
+        try:
+            x, y = pos.split(" ")
+            x = int(float(x) * 4) // 3
+            y = int(float(y) * 4) // 3
+            result.append((x, y))
+        except (ValueError, TypeError):
+            continue
+    return result
+            
+
+def tuple72todpi96(tuplestr:  str) -> Tuple[int, int]:
+    x, y = array72todpi96(tuplestr)
+    return (x, y)
+
+    
 def array72todpi96(array: str) -> List[int]:
     
     result = list()
-    for n in array.split(","):
+    for num in array.split(","):
         try:
-            result.append(int(n * 4) // 3)
+            result.append(int(float(num) * 4) // 3)
         except (TypeError, ValueError):
+            logger.warning(f"{num} convert failed!")
             continue
             
     return result
