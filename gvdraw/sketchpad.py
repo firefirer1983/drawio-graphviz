@@ -69,76 +69,214 @@ class Port:
         return repr(self)
 
 
-
 @dataclass
 class Transition:
-    source_port: Port
-    target_port: Port
+    src_port: Port
+    dst_port: Port
     conditions: Set[str] = field(default_factory=set)
     unless: Set[str] = field(default_factory=set)
-    widget: Optional["TransitionWidget"] = None
+    widget: Optional["EdgeWidget"] = None
 
     def __repr__(self) -> str:
-        return f"{self.source_port} -> {self.target_port}"
+        return f"{self.src_port} -> {self.dst_port}"
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Transition):
-            return (
-                self.source_port == other.source_port
-                and self.target_port == other.target_port
-            )
+            return self.src_port == other.src_port and self.dst_port == other.dst_port
         return False
 
     @property
-    def source(self) -> str:
-        return self.source_port.node.label
+    def src(self) -> str:
+        return self.src_port.node.label
 
     @property
-    def dest(self) -> str:
-        return self.target_port.node.label
+    def dst(self) -> str:
+        return self.dst_port.node.label
 
     def start_at(self, node: "Node"):
-        return self.source_port.node == node
+        return self.src_port.node == node
 
     def end_at(self, node: "Node"):
-        return self.target_port.node == node
+        return self.dst_port.node == node
 
     def draw(self):
         if not self.widget:
-            logger.warning(f"Transtion未关联任何UI Widge")
+            self.widget = EdgeWidget(self)
             return
-        self.widget.draw(self.source_port.pos, self.target_port.pos)
+        self.widget.draw()
 
 
 transition_registry: List[Transition] = list()
 
 
-class TransitionWidget:
-    def __init__(self, tx: Transition):
-        self.tx = tx
-        self.tx.widget = self
-        self.line_id: Optional[int] = None
-        self.arrow_id: Optional[int] = None
+class NodeSearchCombobox(ttk.Combobox):
+    def __init__(self, master, current_value: str, options: Dict[str, "Node"]):
+        self.options = options
+        super().__init__(master, values=list(self.options.keys()), state="normal")
+        self.current(list(self.options.keys()).index(current_value))
+        self.bind("<KeyRelease>", self.on_key_release)
 
-    def draw(self, start: Pos, end: Pos):
-        x, y = end
-        if self.line_id:
-            runtime.canvas.delete(self.line_id)
-        if self.arrow_id:
-            runtime.canvas.delete(self.arrow_id)
+    def on_key_release(self, event=None):
+        # 获取当前输入
+        breakpoint()
+        value = event.widget.get().lower()
+        if value == "":
+            # 如果输入为空，则显示所有选项
+            self["values"] = self.options.keys()
+        else:
+            # 模糊匹配：检查每个选项是否包含当前输入
+            data = [label for label in self.options.keys() if value in label.lower()]
+            self["values"] = data
 
-        self.line_id = runtime.canvas.create_line(*start, *end, fill="black", width=2)
+    def on_combobox_select(self, event):
+        print(f"Selected option: {self.get()}")
 
-        # self.arrow_id = runtime.canvas.create_polygon(
-        #     x,
-        #     y,
-        #     x - ARROW_WIDTH,
-        #     y - ARROW_HEIGHT,
-        #     x + ARROW_WIDTH,
-        #     y - ARROW_HEIGHT,
-        #     fill="black",
-        #     width=2,
-        # )
+
+class EdgeAttrbutor:
+    def __init__(self, trx: "Transition"):
+        self.trx = trx
+        popup = tk.Toplevel(runtime.canvas)
+        # popup.geometry("300x450")
+
+        # 确保弹出框始终位于主窗口之上
+        popup.transient(runtime.root)
+        # 禁用主窗口交互直到弹出框关闭
+        popup.grab_set()
+
+        popup.title("Transition设置")
+        node_map = dict()
+        GenericBFSNodeVisitor(lambda n: node_map.update({f"{n.label}": n})).visit(runtime.tree)
+        
+        # 使用 grid 布局管理器
+        for i in range(6):  # 设置4行
+            popup.grid_rowconfigure(i, weight=1)
+
+        popup.grid_columnconfigure(0, weight=1)
+        popup.grid_columnconfigure(1, weight=5)
+
+        tk.Label(popup, text="src:").grid(
+            row=0, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="dest:").grid(
+            row=1, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="condition:").grid(
+            row=2, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="unless:").grid(
+            row=3, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+
+        src_sel = NodeSearchCombobox(popup, self.trx.src, node_map)
+        src_sel.grid(row=0, column=1, sticky=tk.EW, padx=10)
+
+        dst_sel = NodeSearchCombobox(popup, self.trx.dst, node_map)
+        dst_sel.grid(row=1, column=1, sticky=tk.EW, padx=10)
+
+        condition_entries = tk.Entry(popup)
+        condition_entries.grid(row=2, column=1, sticky=tk.EW, padx=10)
+
+        unless_entries = tk.Entry(popup)
+        unless_entries.grid(row=3, column=1, sticky=tk.EW, padx=10)
+
+        # 添加提交按钮
+        def submit():
+            src_state = src_sel.get()
+            logger.info(f"SRC: {src_state}")
+
+            dst_state = dst_sel.get()
+            logger.info(f"DST: {dst_state}")
+
+            conditions = condition_entries.get()
+            logger.info(f"Conditions: {conditions}")
+            for s in conditions.split(","):
+                self.trx.conditions.add(s)
+
+            unlesses = unless_entries.get()
+            logger.info(f"Unlesses: {unlesses}")
+            for s in unlesses.split(","):
+                self.trx.unless.add(s)
+
+            popup.destroy()  # 关闭弹出框
+            self.trx.draw()
+
+        submit_button = tk.Button(popup, text="确认", command=submit)
+        submit_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+
+class NodeAttributor:
+    def __init__(self, node: "Node"):
+        self.node = node
+        popup = tk.Toplevel(runtime.canvas)
+        popup.title("State设置")
+
+        # 使用 grid 布局管理器
+        for i in range(6):  # 设置4行
+            popup.grid_rowconfigure(i, weight=1)
+
+        popup.grid_columnconfigure(0, weight=1)
+        popup.grid_columnconfigure(1, weight=5)
+
+        tk.Label(popup, text="name:").grid(
+            row=0, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="label:").grid(
+            row=1, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="on_enter:").grid(
+            row=2, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+        tk.Label(popup, text="on_exit:").grid(
+            row=3, column=0, sticky=tk.W, padx=10, pady=(10, 0)
+        )
+
+        name_entry = tk.Entry(popup)
+        name_entry.grid(row=0, column=1, sticky=tk.EW, padx=10)
+
+        label_entry = tk.Entry(popup)
+        label_entry.grid(row=1, column=1, sticky=tk.EW, padx=10)
+
+        on_enter_entries = tk.Entry(popup)
+        on_enter_entries.grid(row=2, column=1, sticky=tk.EW, padx=10)
+
+        on_exit_entries = tk.Entry(popup)
+        on_exit_entries.grid(row=3, column=1, sticky=tk.EW, padx=10)
+
+        # 添加提交按钮
+        def submit():
+            state_name = name_entry.get()
+            logger.info(f"Name: {state_name}")
+            self.node.state_name = state_name
+
+            state_label = label_entry.get()
+            logger.info(f"Label: {state_label}")
+            self.node.state_label = state_label or self.node.state_name
+
+            on_enters = on_enter_entries.get()
+            logger.info(f"OnEnters: {on_enters}")
+            for s in on_enters.split(","):
+                self.node.add_on_enter(s)
+
+            on_exits = on_exit_entries.get()
+            logger.info(f"OnExits: {on_exits}")
+            for s in on_exits.split(","):
+                self.node.add_on_exit(s)
+
+            popup.destroy()  # 关闭弹出框
+            self.node.draw()
+
+        submit_button = tk.Button(popup, text="确认", command=submit)
+        submit_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+
+class EdgeWidget:
+    def __init__(self, trx: Transition):
+        self.trx = trx
+        self.trx.widget = self
+        x, y = trx.dst_port.pos
+        self.line_id = runtime.canvas.create_line(
+            *self.trx.src_port.pos, *self.trx.dst_port.pos, fill="black", width=2
+        )
         self.arrow_id = runtime.canvas.create_oval(
             x - PORT_RADIUS,
             y - PORT_RADIUS,
@@ -153,6 +291,24 @@ class TransitionWidget:
         runtime.canvas.tag_bind(self.line_id, "<ButtonPress-3>", self.on_click_btn3)
         runtime.canvas.tag_bind(self.line_id, "<ButtonRelease-3>", self.on_release_btn3)
 
+    def draw(self):
+        x, y = self.trx.dst_port.pos
+        if self.line_id:
+            runtime.canvas.delete(self.line_id)
+        if self.arrow_id:
+            runtime.canvas.delete(self.arrow_id)
+        self.line_id = runtime.canvas.create_line(
+            *self.trx.src_port.pos, *self.trx.dst_port.pos, fill="black", width=2
+        )
+        self.arrow_id = runtime.canvas.create_oval(
+            x - PORT_RADIUS,
+            y - PORT_RADIUS,
+            x + PORT_RADIUS,
+            y + PORT_RADIUS,
+            fill="black",
+            width=2,
+        )
+
     def on_click_btn1(self, event):
         logger.info(f"TransitionWidget on click btn1")
         return "break"
@@ -162,48 +318,11 @@ class TransitionWidget:
         return "break"
 
     def on_click_btn3(self, event):
-        logger.info(f"TransitionWidget on click btn3")
-        popup = tk.Toplevel(runtime.canvas)
-        popup.title("Multi-input Dialog")
-
-        # 使用 grid 布局管理器
-        for i in range(4):  # 设置3行
-            popup.grid_rowconfigure(i, weight=1)
-        for i in range(2):  # 设置2列
-            popup.grid_columnconfigure(i, weight=1)
-
-        # 第一个输入框标签和输入框
-        label1 = tk.Label(popup, text="Conditions:")
-        label1.grid(row=1, column=0, sticky=tk.W, padx=10, pady=(10, 0))
-
-        conditions_entry = tk.Entry(popup)
-        conditions_entry.grid(row=1, column=0, columnspan=2, sticky=tk.EW, padx=10)
-
-        label2 = tk.Label(popup, text="Unless:")
-        label2.grid(row=2, column=0, sticky=tk.W, padx=10, pady=(10, 0))
-
-        unless_entry = tk.Entry(popup)
-        unless_entry.grid(row=2, column=0, columnspan=2, sticky=tk.EW, padx=10)
-
-        # 添加提交按钮
-        def submit():
-            conditions_entries = conditions_entry.get()
-            logger.info(f"Conditions: {conditions_entries}")
-            for s in conditions_entries.split(","):
-                self.tx.conditions.add(s)
-            unless_entries = unless_entry.get()
-            logger.info(f"Unless: {unless_entries}")
-            for s in unless_entries.split(","):
-                self.tx.unless.add(s)
-            popup.destroy()  # 关闭弹出框
-
-        submit_button = tk.Button(popup, text="确认", command=submit)
-        submit_button.grid(row=4, column=0, columnspan=2, pady=10)
-        return "break"
+        EdgeAttrbutor(self.trx)
 
     def on_release_btn3(self, event):
         logger.info(f"TransitionWidget on release btn3")
-        logger.info(f"{self.tx} on release btn3")
+        logger.info(f"{self.trx} on release btn3")
         return "break"
 
 
@@ -258,12 +377,9 @@ class NodeWidget:
         pass
 
 
-def register_transition(source_port: Port, target_port: Port) -> Transition:
-    tx = Transition(source_port, target_port)
-    tx.widget = TransitionWidget(tx)
-    logger.info(f"ADD {tx}")
-    transition_registry.append(tx)
-    return tx
+def register_transition(trx: Transition):
+    logger.info(f"ADD {trx}")
+    transition_registry.append(trx)
 
 
 class Pole:
@@ -277,7 +393,7 @@ class CanvasMode:
     Browse = "Browse"
     Draw = "Draw"
     Moving = "Moving"
-    Transition = "Transition"
+    Edit = "Edit"
     Export = "Export"
 
 
@@ -362,6 +478,8 @@ class Node(Region):
         self.ports: List[int] = list()
         self.on_enter: Set[str] = set()
         self.on_exit: Set[str] = set()
+        self.state_name: str = ""
+        self.state_label: Optional[str] = None
 
         n = Node.sequence_id // len(UNIQUE_CODES)
         l = Node.sequence_id % len(UNIQUE_CODES)
@@ -421,17 +539,17 @@ class Node(Region):
         self.on_exit.add(func)
 
     @property
-    def label(self) -> str:
-        return self.unique_id
+    def name(self) -> str:
+        return self.state_name
 
-    @label.setter
-    def label(self, value):
-        # need to double check
-        self.unique_id = value
+    @property
+    def label(self) -> str:
+        return self.state_label or self.state_name or ""
 
     @property
     def is_root(self) -> bool:
-        return self.parent is None
+        return False
+        return self is runtime.tree
 
 
 DEFAULT_FONT_SIZE = 10
@@ -472,8 +590,8 @@ def prepare_runtime():
     # 创建 Canvas 并放置在画布框架中
     canvas = tk.Canvas(canvas_frame, bg="white")
     canvas.pack(fill=tk.BOTH, expand=True)
-
-    return RuntimeEnv(root, top_frame, canvas_frame, canvas, Node(0, 0, 1920, 1080))
+    topnode = Node(0, 0, 1920, 1080)
+    return RuntimeEnv(root, top_frame, canvas_frame, canvas, topnode)
 
 
 runtime = prepare_runtime()
@@ -531,71 +649,65 @@ def get_parent(node: Node) -> Node:
 button_region_registry: List[Region] = list()
 
 
-# class CanvasButtonBase:
-#     def __init__(self, canvas, x, y, width, height, text):
-#         button_region_registry.append(Region(x, y, width, height))
-#         self.canvas = canvas
-#         self.origin_color = "gray"
-#         # 创建矩形作为按钮背景
-#         self.rect = canvas.create_rectangle(
-#             x, y, x + width, y + height, fill=self.origin_color, outline="black"
-#         )
-
-#         # 创建文本标签
-#         self.text = canvas.create_text(
-#             x + width / 2,
-#             y + height / 2,
-#             text=text,
-#             font=("Arial", 8, "bold"),
-#             fill="black",
-#         )
-
-#         # 绑定鼠标事件
-
-#         canvas.tag_bind(self.rect, "<ButtonPress-1>", self.on_press)
-#         canvas.tag_bind(self.rect, "<ButtonRelease-1>", self.on_release)
-
-#         canvas.tag_bind(self.text, "<ButtonPress-1>", self.on_press)
-#         canvas.tag_bind(self.text, "<ButtonRelease-1>", self.on_release)
-
-#     @abstractmethod
-#     def on_press(self, event) -> Optional[str]:
-#         pass
-
-#     @abstractmethod
-#     def on_release(self, event) -> Optional[str]:
-#         pass
-
 BTN_WIDTH = 42
 BTN_HEIGHT = 20
 
 
-class MoveButton(tk.Button):
+class CanvasModeButton(tk.Radiobutton):
+    canva_mode = tk.StringVar()
+    canva_mode.set(runtime.canvas_mode)
+
+
+class BrowseButton(CanvasModeButton):
     def __init__(self, parent):
-        super().__init__(master=parent, text="move", command=self.on_press)
+        super().__init__(
+            master=parent,
+            text="browse",
+            variable=CanvasModeButton.canva_mode,
+            value=CanvasMode.Browse,
+            command=self.on_press,
+        )
 
     def on_press(self):
         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
-        if runtime.canvas_mode == CanvasMode.Moving:
-            runtime.canvas_mode = CanvasMode.Browse
-        else:
-            runtime.canvas_mode = CanvasMode.Moving
+        if runtime.canvas_mode == CanvasMode.Edit:
+            PortVisitor(False).visit(runtime.tree)
+        runtime.canvas_mode = CanvasMode.Browse
         return "break"
 
 
-class TransitionButton(tk.Button):
+class MoveButton(CanvasModeButton):
     def __init__(self, parent):
-        super().__init__(parent, text="trans", command=self.on_press)
+        super().__init__(
+            master=parent,
+            text="move",
+            variable=CanvasModeButton.canva_mode,
+            value=CanvasMode.Moving,
+            command=self.on_press,
+        )
 
     def on_press(self):
         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
-        if runtime.canvas_mode == CanvasMode.Transition:
-            runtime.canvas_mode = CanvasMode.Browse
-        else:
-            runtime.canvas_mode = CanvasMode.Transition
+        if runtime.canvas_mode == CanvasMode.Edit:
+            PortVisitor(False).visit(runtime.tree)
+        runtime.canvas_mode = CanvasMode.Moving
+        return "break"
 
-        if runtime.canvas_mode == CanvasMode.Transition:
-            PortVisitor(True).visit(runtime.tree)
+
+class EditButton(tk.Radiobutton):
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            text="edit",
+            variable=CanvasModeButton.canva_mode,
+            value=CanvasMode.Edit,
+            command=self.on_press,
+        )
+
+    def on_press(self):
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+        runtime.canvas_mode = CanvasMode.Edit
+        PortVisitor(True).visit(runtime.tree)
         return "break"
 
 
@@ -609,63 +721,14 @@ class ExportButton(tk.Button):
         return "break"
 
 
-# class MoveButton(CanvasButtonBase):
-#     def __init__(self, canvas, x, y, width, height):
-#         super().__init__(canvas, x, y, width, height, "move")
+class ImportButton(tk.Button):
+    def __init__(self, parent):
+        super().__init__(parent, text="import", command=self.on_press)
 
-#     def on_press(self, event):
-#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
-#         if runtime.canvas_mode == CanvasMode.Moving:
-#             runtime.canvas_mode = CanvasMode.Browse
-#         else:
-#             runtime.canvas_mode = CanvasMode.Moving
-
-#         if runtime.canvas_mode == CanvasMode.Moving:
-#             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
-#         return "break"
-
-#     def on_release(self, event):
-#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on release!")
-#         if runtime.canvas_mode != CanvasMode.Moving:
-#             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
-#         return "break"
-
-
-# class TransitionButton(CanvasButtonBase):
-#     def __init__(self, canvas, x, y, width, height):
-#         super().__init__(canvas, x, y, width, height, "trans")
-
-#     def on_press(self, event):
-#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
-#         if runtime.canvas_mode == CanvasMode.Transition:
-#             runtime.canvas_mode = CanvasMode.Browse
-#         else:
-#             runtime.canvas_mode = CanvasMode.Transition
-
-#         if runtime.canvas_mode == CanvasMode.Transition:
-#             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
-#             PortVisitor(True).visit(runtime.tree)
-#         return "break"
-
-#     def on_release(self, event):
-#         logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
-#         if runtime.canvas_mode != CanvasMode.Transition:
-#             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
-#             PortVisitor(False).visit(runtime.tree)
-#         return "break"
-
-
-# class ExportButton(CanvasButtonBase):
-#     def __init__(self, canvas, x, y, width, height):
-#         super().__init__(canvas, x, y, width, height, "export")
-
-#     def on_press(self, event):
-#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
-#         logger.info(f"Start Exporting ...")
-#         return "break"
-
-#     def on_release(self, event):
-#         logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
+    def on_press(self):
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+        logger.info(f"Start Importing ...")
+        return "break"
 
 
 @dataclass
@@ -718,6 +781,7 @@ class BrowseCanvasHandler(EventRegistry):
             dx = runtime.canvas.canvasx(event.x) - mp.x
             dy = runtime.canvas.canvasy(event.y) - mp.y
             runtime.canvas.move("all", dx, dy)
+            PamVisitor().visit(runtime.tree)
             mp.x = runtime.canvas.canvasx(event.x)
             mp.y = runtime.canvas.canvasy(event.y)
 
@@ -737,18 +801,16 @@ class BrowseCanvasHandler(EventRegistry):
             return
 
         runtime.scale_factor *= factor
-
         # 缩放围绕鼠标指针进行
         x = runtime.canvas.canvasx(event.x)
         y = runtime.canvas.canvasy(event.y)
-
         runtime.canvas.scale("all", x, y, factor, factor)
-
-        # 更新所有对象的坐标
-        for item in runtime.canvas.find_all():
-            coords = runtime.canvas.coords(item)
-            new_coords = [coord * factor for coord in coords]
-            runtime.canvas.coords(item, *new_coords)
+        PamVisitor().visit(runtime.tree)
+        # # 更新所有对象的坐标
+        # for item in runtime.canvas.find_all():
+        #     coords = runtime.canvas.coords(item)
+        #     new_coords = [coord * factor for coord in coords]
+        #     runtime.canvas.coords(item, *new_coords)
 
 
 class MovingCanvasHandler(EventRegistry):
@@ -780,11 +842,21 @@ class MovingCanvasHandler(EventRegistry):
         return
 
 
-class DrawCanvasHandler(EventRegistry):
-    def on_click(self, event):
-        mp.pos = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
+class EditCanvasHandler(EventRegistry):
+    edit_target = Node
 
-    def on_move(self, event):
+    def on_click(self, event):
+        x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
+        port = get_select_port(x, y)
+        if port:
+            EditCanvasHandler.edit_target = Transition
+            runtime.source_port, mp.pos = port, port.pos
+        else:
+            EditCanvasHandler.edit_target = Node
+            mp.pos = x, y
+        logger.warning(f"({x},{y}) : Target: {EditCanvasHandler.edit_target}")
+
+    def on_move_node(self, event):
         x, y = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
         if runtime.box:
             runtime.canvas.delete(runtime.box)
@@ -792,7 +864,7 @@ class DrawCanvasHandler(EventRegistry):
             (*mp.pos, x, y), fill="", outline="yellow"
         )
 
-    def on_release(self, event):
+    def on_release_node(self, event):
         x, y = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
 
         if runtime.box:
@@ -822,41 +894,47 @@ class DrawCanvasHandler(EventRegistry):
             if node.is_child(c):
                 node.add_child(c)
                 parent.remove_child(c)
-        LabelVisitor().visit(node)
+        # LabelVisitor().visit(node)
+        PortVisitor(True).visit(node)
+        NodeAttributor(node)
 
-
-class TransitionCanvasHandler(EventRegistry):
-    def on_click(self, event):
-        x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
-        port = get_select_port(x, y)
-        if not port:
-            logger.warning(f"未选中任何Port: ({x},{y})")
-            return
-        runtime.source_port, mp.pos = port, port.pos
-
-    def on_release(self, event):
-        if runtime.line:
-            runtime.canvas.delete(runtime.line)
-        if not runtime.source_port:
-            logger.warning(f"未选中任何 source port")
-            return
-
-        x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
-        port = get_select_port(x, y)
-        if not port:
-            logger.warning(f"未选中任何 target node")
-            return
-        runtime.target_port, pos = port, port.pos
-        tx = register_transition(runtime.source_port, runtime.target_port)
-        tx.draw()
-        runtime.source_port = runtime.target_port = None
-        mp.pos = pos
-
-    def on_move(self, event):
+    def on_move_edge(self, event):
         if runtime.line:
             runtime.canvas.delete(runtime.line)
         x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
         runtime.line = runtime.canvas.create_line(*mp.pos, x, y, fill="yellow", width=2)
+
+    def on_release_edge(self, event):
+        x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
+        runtime.target_port = get_select_port(x, y)
+        if not (runtime.target_port and runtime.source_port):
+            logger.warning(
+                f"Port Missing: {runtime.source_port} => {runtime.target_port} "
+            )
+            return
+
+        trx = Transition(runtime.source_port, runtime.target_port)
+        EdgeAttrbutor(trx)
+
+        register_transition(trx)
+        trx.draw()
+
+        mp.pos = runtime.target_port.pos
+        runtime.source_port = runtime.target_port = None
+        if runtime.line:
+            runtime.canvas.delete(runtime.line)
+
+    def on_release(self, event):
+        if EditCanvasHandler.edit_target == Node:
+            self.on_release_node(event)
+        else:
+            self.on_release_edge(event)
+
+    def on_move(self, event):
+        if EditCanvasHandler.edit_target == Node:
+            self.on_move_node(event)
+        else:
+            self.on_move_edge(event)
 
 
 class AttrCanvasHandler(EventRegistry):
@@ -871,19 +949,6 @@ class AttrCanvasHandler(EventRegistry):
 
     def on_move(self, event):
         pass
-
-
-# def button_event_bypass(f: Callable):
-#     @wraps(f)
-#     def _wrapper(event):
-#         x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
-#         for r in button_region_registry:
-#             if is_inside((x, y), r):
-#                 logger.warning(f"({x},{y}) in {r}")
-#                 return
-#         return f(event)
-
-#     return _wrapper
 
 
 def on_click(event):
@@ -943,6 +1008,19 @@ class BFSVisitor:
                 q.append(c)
 
 
+class GenericBFSNodeVisitor:
+    def __init__(self, visitor: Callable):
+        self.visitor = visitor
+
+    def visit(self, node: Node):
+        q: Deque[Node] = deque([node])
+        while q:
+            n = q.popleft()
+            self.visitor(n)
+            for c in n.children:
+                q.append(c)
+
+
 class LabelVisitor(DFSVisitor):
     # def visit_node(self, node: Node):
     #     if node.title_id:
@@ -994,6 +1072,19 @@ class LabelVisitor(DFSVisitor):
     #     )
 
 
+class PamVisitor(DFSVisitor):
+    def visit_node(self, node: Node):
+        if node.widget:
+            x0, y0, x1, y1 = runtime.canvas.coords(node.widget.tag_id)
+            x0, y0 = runtime.canvas.canvasx(x0), runtime.canvas.canvasx(y0)
+            x1, y1 = runtime.canvas.canvasx(x1), runtime.canvas.canvasx(y1)
+            node.x, node.y = x0, y0
+            node.width, node.height = int(x1 - x0), int(y1 - y0)
+        for tx in transition_registry:
+            if tx.start_at(node) or tx.end_at(node):
+                pass
+
+
 class OffsetVisitor(DFSVisitor):
     def __init__(self, hoffset: int, voffset: int):
         self.hoffset = hoffset
@@ -1005,8 +1096,9 @@ class OffsetVisitor(DFSVisitor):
         node.draw()
         for tx in transition_registry:
             if tx.start_at(node) or tx.end_at(node):
-                tx.draw()
-        LabelVisitor().visit_node(node)
+                pass
+                # tx.draw()
+        # LabelVisitor().visit_node(node)
 
 
 ARROW_WIDTH = 3
@@ -1304,8 +1396,8 @@ class LayoutExportVisitor:
         for tx in transition_registry:
             self.transitions.append(
                 dict(
-                    source=tx.source,
-                    dest=tx.dest,
+                    source=tx.src,
+                    dest=tx.dst,
                     conditions=tx.conditions,
                     unless=tx.unless,
                     trigger="next",
@@ -1349,7 +1441,7 @@ class PortVisitor(DFSVisitor):
             self.visit(c)
 
 
-def prepare_layout(env: RuntimeEnv):
+def config_layout(env: RuntimeEnv):
     # BTN_WIDTH = 42
     # BTN_HEIGHT = 20
     # BTN_GAP = 3
@@ -1363,13 +1455,12 @@ def prepare_layout(env: RuntimeEnv):
     runtime.root.grid_columnconfigure(0, weight=1)
 
     # 创建顶部框架用于放置按钮
-    runtime.top_frame.grid(row=0, column=0, sticky="ew")
+    runtime.top_frame.grid(row=0, column=0, sticky="w")
 
     # 创建画布框架并配置其在网格中的位置
     runtime.canvas_frame.grid(row=1, column=0, sticky="nsew")
 
     # 配置顶部框架的列权重，使得按钮均匀分布
-    runtime.top_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
     env.canvas.bind("<ButtonPress-1>", on_click)
     env.canvas.bind("<B1-Motion>", on_move)
@@ -1378,23 +1469,23 @@ def prepare_layout(env: RuntimeEnv):
     env.canvas.bind("<Button-4>", on_roll)  # Linux 滚轮上滚
     env.canvas.bind("<Button-5>", on_roll)  # Linux 滚轮下滚
 
-    # MoveButton(env.canvas, 0, 0, BTN_WIDTH, BTN_HEIGHT)
-    # TransitionButton(env.canvas, BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
-    # ExportButton(env.canvas, 2 * BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
-
-    move_btn = MoveButton(env.top_frame)
-    move_btn.grid(row=0, column=0, padx=0, pady=0, sticky="ew")
-
-    trans_btn = TransitionButton(env.top_frame)
-    trans_btn.grid(row=0, column=1, padx=0, pady=0, sticky="ew")
-
-    export_btn = ExportButton(env.top_frame)
-    export_btn.grid(row=0, column=2, padx=0, pady=0, sticky="ew")
+    buttons = [
+        ImportButton(env.top_frame),
+        ExportButton(env.top_frame),
+        BrowseButton(env.top_frame),
+        MoveButton(env.top_frame),
+        EditButton(env.top_frame),
+    ]
+    for i, btn in enumerate(buttons):
+        btn.grid(row=0, column=i, sticky="ew")
+    runtime.top_frame.grid_columnconfigure(
+        tuple(i for i in range(len(buttons))), weight=1
+    )
 
 
 @cli.command
 def start():
-    prepare_layout(runtime)
+    config_layout(runtime)
     runtime.run()
 
 
@@ -1403,7 +1494,7 @@ def start():
 def import_json(filename: str):
     import pprint
 
-    prepare_layout(runtime)
+    config_layout(runtime)
 
     with open(filename, "r", encoding="utf8") as f:
         dat = f.read()
@@ -1414,14 +1505,13 @@ def import_json(filename: str):
     visitor = LayoutImportVisitor(dotfile)
     x0, y0, x1, y1 = visitor.layout.bb
     width, height = x1 - x0, y1 - y0
-    # runtime.canvas.config(width=width, height=height)
-    # runtime.tree.resize(width, height)
     for dotnode in visitor.nodes:
         if isinstance(dotnode, Cluster):
             x0, y0, x1, y1 = dotnode.bb
             width, height = x1 - x0, y1 - y0
             node = Node(x0, y0, width, height)
-            _, node.label = dotnode.name.split("cluster_")
+            _, node.unique_id = dotnode.name.split("cluster_")
+            *_, node.state_name = node.unique_id.split(".")
             node.draw()
             parent = get_parent(node)
             parent.add_child(node)
@@ -1433,7 +1523,8 @@ def import_json(filename: str):
             x0, y0 = cx - width // 2, cy - height // 2
             logger.info(f"{dotnode.name}: ({x0},{y0}) {width}x{height}")
             node = Node(x0, y0, width, height)
-            node.label = dotnode.name
+            node.unique_id = dotnode.name
+            *_, node.state_name = node.unique_id.split(".")
             node.draw()
             parent = get_parent(node)
             parent.add_child(node)
