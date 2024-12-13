@@ -69,6 +69,7 @@ class Port:
         return repr(self)
 
 
+
 @dataclass
 class Transition:
     source_port: Port
@@ -221,7 +222,7 @@ class NodeWidget:
             node.x + NODE_LABEL_X_OFFSET,
             node.y + NODE_LABEL_Y_OFFSET,
             text=node.label,
-            font=("Arial", 10, "bold"),
+            font=("Arial", runtime.fontsize, "bold"),
         )
 
     def draw(self):
@@ -241,7 +242,7 @@ class NodeWidget:
             self.node.x + NODE_LABEL_X_OFFSET,
             self.node.y + NODE_LABEL_Y_OFFSET,
             text=self.node.label,
-            font=("Arial", 10, "bold"),
+            font=("Arial", runtime.fontsize, "bold"),
         )
 
     def on_click_btn1(self, event):
@@ -433,9 +434,14 @@ class Node(Region):
         return self.parent is None
 
 
+DEFAULT_FONT_SIZE = 10
+
+
 @dataclass
 class RuntimeEnv:
     root: tk.Tk
+    top_frame: tk.Frame
+    canvas_frame: tk.Frame
     canvas: tk.Canvas
     tree: Node
     canvas_mode: str = CanvasMode.Browse
@@ -448,24 +454,26 @@ class RuntimeEnv:
     def run(self):
         return self.root.mainloop()
 
+    @property
+    def fontsize(self) -> int:
+        return int(DEFAULT_FONT_SIZE * self.scale_factor)
+
 
 def prepare_runtime():
     root = tk.Tk()
-    h = ttk.Scrollbar(root, orient=tk.HORIZONTAL)
-    v = ttk.Scrollbar(root, orient=tk.VERTICAL)
+    root.title("Gvdraw")
+
     canvas = tk.Canvas(
         root,
-        scrollregion=(0, 0, 1000, 1000),
-        yscrollcommand=v.set,
-        xscrollcommand=h.set,
     )
-    h["command"] = canvas.xview
-    v["command"] = canvas.yview
+    top_frame = tk.Frame(root, bg="lightgray")
+    canvas_frame = tk.Frame(root)
 
-    h.grid(column=0, row=1, sticky=(tk.W, tk.E))
-    v.grid(column=1, row=0, sticky=(tk.N, tk.S))
+    # 创建 Canvas 并放置在画布框架中
+    canvas = tk.Canvas(canvas_frame, bg="white")
+    canvas.pack(fill=tk.BOTH, expand=True)
 
-    return RuntimeEnv(root, canvas, Node(0, 0, 1920, 1080))
+    return RuntimeEnv(root, top_frame, canvas_frame, canvas, Node(0, 0, 1920, 1080))
 
 
 runtime = prepare_runtime()
@@ -523,69 +531,63 @@ def get_parent(node: Node) -> Node:
 button_region_registry: List[Region] = list()
 
 
-class CanvasButtonBase:
-    def __init__(self, canvas, x, y, width, height, text):
-        button_region_registry.append(Region(x, y, width, height))
-        self.canvas = canvas
-        self.origin_color = "gray"
-        # 创建矩形作为按钮背景
-        self.rect = canvas.create_rectangle(
-            x, y, x + width, y + height, fill=self.origin_color, outline="black"
-        )
+# class CanvasButtonBase:
+#     def __init__(self, canvas, x, y, width, height, text):
+#         button_region_registry.append(Region(x, y, width, height))
+#         self.canvas = canvas
+#         self.origin_color = "gray"
+#         # 创建矩形作为按钮背景
+#         self.rect = canvas.create_rectangle(
+#             x, y, x + width, y + height, fill=self.origin_color, outline="black"
+#         )
 
-        # 创建文本标签
-        self.text = canvas.create_text(
-            x + width / 2,
-            y + height / 2,
-            text=text,
-            font=("Arial", 8, "bold"),
-            fill="black",
-        )
+#         # 创建文本标签
+#         self.text = canvas.create_text(
+#             x + width / 2,
+#             y + height / 2,
+#             text=text,
+#             font=("Arial", 8, "bold"),
+#             fill="black",
+#         )
 
-        # 绑定鼠标事件
+#         # 绑定鼠标事件
 
-        canvas.tag_bind(self.rect, "<ButtonPress-1>", self.on_press)
-        canvas.tag_bind(self.rect, "<ButtonRelease-1>", self.on_release)
+#         canvas.tag_bind(self.rect, "<ButtonPress-1>", self.on_press)
+#         canvas.tag_bind(self.rect, "<ButtonRelease-1>", self.on_release)
 
-        canvas.tag_bind(self.text, "<ButtonPress-1>", self.on_press)
-        canvas.tag_bind(self.text, "<ButtonRelease-1>", self.on_release)
+#         canvas.tag_bind(self.text, "<ButtonPress-1>", self.on_press)
+#         canvas.tag_bind(self.text, "<ButtonRelease-1>", self.on_release)
 
-    @abstractmethod
-    def on_press(self, event) -> Optional[str]:
-        pass
+#     @abstractmethod
+#     def on_press(self, event) -> Optional[str]:
+#         pass
 
-    @abstractmethod
-    def on_release(self, event) -> Optional[str]:
-        pass
+#     @abstractmethod
+#     def on_release(self, event) -> Optional[str]:
+#         pass
+
+BTN_WIDTH = 42
+BTN_HEIGHT = 20
 
 
-class MoveButton(CanvasButtonBase):
-    def __init__(self, canvas, x, y, width, height):
-        super().__init__(canvas, x, y, width, height, "move")
+class MoveButton(tk.Button):
+    def __init__(self, parent):
+        super().__init__(master=parent, text="move", command=self.on_press)
 
-    def on_press(self, event):
+    def on_press(self):
         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
         if runtime.canvas_mode == CanvasMode.Moving:
             runtime.canvas_mode = CanvasMode.Browse
         else:
             runtime.canvas_mode = CanvasMode.Moving
-
-        if runtime.canvas_mode == CanvasMode.Moving:
-            self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
-        return "break"
-
-    def on_release(self, event):
-        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on release!")
-        if runtime.canvas_mode != CanvasMode.Moving:
-            self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
         return "break"
 
 
-class TransitionButton(CanvasButtonBase):
-    def __init__(self, canvas, x, y, width, height):
-        super().__init__(canvas, x, y, width, height, "trans")
+class TransitionButton(tk.Button):
+    def __init__(self, parent):
+        super().__init__(parent, text="trans", command=self.on_press)
 
-    def on_press(self, event):
+    def on_press(self):
         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
         if runtime.canvas_mode == CanvasMode.Transition:
             runtime.canvas_mode = CanvasMode.Browse
@@ -593,29 +595,77 @@ class TransitionButton(CanvasButtonBase):
             runtime.canvas_mode = CanvasMode.Transition
 
         if runtime.canvas_mode == CanvasMode.Transition:
-            self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
             PortVisitor(True).visit(runtime.tree)
         return "break"
 
-    def on_release(self, event):
-        logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
-        if runtime.canvas_mode != CanvasMode.Transition:
-            self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
-            PortVisitor(False).visit(runtime.tree)
-        return "break"
 
+class ExportButton(tk.Button):
+    def __init__(self, parent):
+        super().__init__(parent, text="export", command=self.on_press)
 
-class ExportButton(CanvasButtonBase):
-    def __init__(self, canvas, x, y, width, height):
-        super().__init__(canvas, x, y, width, height, "export")
-
-    def on_press(self, event):
+    def on_press(self):
         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
         logger.info(f"Start Exporting ...")
         return "break"
 
-    def on_release(self, event):
-        logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
+
+# class MoveButton(CanvasButtonBase):
+#     def __init__(self, canvas, x, y, width, height):
+#         super().__init__(canvas, x, y, width, height, "move")
+
+#     def on_press(self, event):
+#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+#         if runtime.canvas_mode == CanvasMode.Moving:
+#             runtime.canvas_mode = CanvasMode.Browse
+#         else:
+#             runtime.canvas_mode = CanvasMode.Moving
+
+#         if runtime.canvas_mode == CanvasMode.Moving:
+#             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
+#         return "break"
+
+#     def on_release(self, event):
+#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on release!")
+#         if runtime.canvas_mode != CanvasMode.Moving:
+#             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
+#         return "break"
+
+
+# class TransitionButton(CanvasButtonBase):
+#     def __init__(self, canvas, x, y, width, height):
+#         super().__init__(canvas, x, y, width, height, "trans")
+
+#     def on_press(self, event):
+#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+#         if runtime.canvas_mode == CanvasMode.Transition:
+#             runtime.canvas_mode = CanvasMode.Browse
+#         else:
+#             runtime.canvas_mode = CanvasMode.Transition
+
+#         if runtime.canvas_mode == CanvasMode.Transition:
+#             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
+#             PortVisitor(True).visit(runtime.tree)
+#         return "break"
+
+#     def on_release(self, event):
+#         logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
+#         if runtime.canvas_mode != CanvasMode.Transition:
+#             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
+#             PortVisitor(False).visit(runtime.tree)
+#         return "break"
+
+
+# class ExportButton(CanvasButtonBase):
+#     def __init__(self, canvas, x, y, width, height):
+#         super().__init__(canvas, x, y, width, height, "export")
+
+#     def on_press(self, event):
+#         logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+#         logger.info(f"Start Exporting ...")
+#         return "break"
+
+#     def on_release(self, event):
+#         logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
 
 
 @dataclass
@@ -678,6 +728,7 @@ class BrowseCanvasHandler(EventRegistry):
         """
         Zoom Up/Down
         """
+        logger.info(f"[Rolling]: {event.num}")
         if event.num == 5 or event.delta == -120:  # 向下滚动或 Linux 下滚
             factor = 0.9
         elif event.num == 4 or event.delta == 120:  # 向上滚动或 Linux 上滚
@@ -822,39 +873,39 @@ class AttrCanvasHandler(EventRegistry):
         pass
 
 
-def button_event_bypass(f: Callable):
-    @wraps(f)
-    def _wrapper(event):
-        x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
-        for r in button_region_registry:
-            if is_inside((x, y), r):
-                logger.warning(f"({x},{y}) in {r}")
-                return
-        return f(event)
+# def button_event_bypass(f: Callable):
+#     @wraps(f)
+#     def _wrapper(event):
+#         x, y = runtime.canvas.canvasy(event.x), runtime.canvas.canvasy(event.y)
+#         for r in button_region_registry:
+#             if is_inside((x, y), r):
+#                 logger.warning(f"({x},{y}) in {r}")
+#                 return
+#         return f(event)
 
-    return _wrapper
+#     return _wrapper
 
 
-@button_event_bypass
 def on_click(event):
+    logger.info(f"[OnClick] {event} @ {runtime.canvas_mode.lower()}")
     eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_click(event)
 
 
-@button_event_bypass
 def on_roll(event):
+    logger.info(f"[OnRoll] {event} @ {runtime.canvas_mode.lower()}")
     eventhandler = event_registry[runtime.canvas_mode.lower()]
-    eventhandler.on_click(event)
+    eventhandler.on_roll(event)
 
 
-@button_event_bypass
 def on_move(event):
+    logger.info(f"[OnMove] {event} @ {runtime.canvas_mode.lower()}")
     eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_move(event)
 
 
-@button_event_bypass
 def on_release(event):
+    logger.info(f"[OnRelease] {event} @ {runtime.canvas_mode.lower()}")
     eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_release(event)
 
@@ -921,7 +972,7 @@ class LabelVisitor(DFSVisitor):
             node.x + NODE_LABEL_X_OFFSET,
             node.y + NODE_LABEL_Y_OFFSET,
             text=label,
-            font=("Arial", 10, "bold"),
+            font=("Arial", runtime.fontsize, "bold"),
         )
 
     # def visit_node(self, node: Node):
@@ -1300,13 +1351,27 @@ class PortVisitor(DFSVisitor):
 
 
 def prepare_layout(env: RuntimeEnv):
-    BTN_WIDTH = 42
-    BTN_HEIGHT = 20
-    BTN_GAP = 3
-    BTN_OFFSET = BTN_GAP + BTN_WIDTH
-    env.canvas.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
-    env.root.grid_columnconfigure(0, weight=1)
-    env.root.grid_rowconfigure(0, weight=1)
+    # BTN_WIDTH = 42
+    # BTN_HEIGHT = 20
+    # BTN_GAP = 3
+    # BTN_OFFSET = BTN_GAP + BTN_WIDTH
+    # env.canvas.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+    # env.root.grid_columnconfigure(0, weight=1)
+    # env.root.grid_rowconfigure(0, weight=1)
+
+    # 配置主窗口的网格布局
+    runtime.root.grid_rowconfigure(1, weight=1)
+    runtime.root.grid_columnconfigure(0, weight=1)
+
+    # 创建顶部框架用于放置按钮
+    runtime.top_frame.grid(row=0, column=0, sticky="ew")
+
+    # 创建画布框架并配置其在网格中的位置
+    runtime.canvas_frame.grid(row=1, column=0, sticky="nsew")
+
+    # 配置顶部框架的列权重，使得按钮均匀分布
+    runtime.top_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
     env.canvas.bind("<ButtonPress-1>", on_click)
     env.canvas.bind("<B1-Motion>", on_move)
     env.canvas.bind("<ButtonRelease-1>", on_release)
@@ -1314,9 +1379,18 @@ def prepare_layout(env: RuntimeEnv):
     env.canvas.bind("<Button-4>", on_roll)  # Linux 滚轮上滚
     env.canvas.bind("<Button-5>", on_roll)  # Linux 滚轮下滚
 
-    MoveButton(env.canvas, 0, 0, BTN_WIDTH, BTN_HEIGHT)
-    TransitionButton(env.canvas, BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
-    ExportButton(env.canvas, 2 * BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
+    # MoveButton(env.canvas, 0, 0, BTN_WIDTH, BTN_HEIGHT)
+    # TransitionButton(env.canvas, BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
+    # ExportButton(env.canvas, 2 * BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
+
+    move_btn = MoveButton(env.top_frame)
+    move_btn.grid(row=0, column=0, padx=0, pady=0, sticky="ew")
+
+    trans_btn = TransitionButton(env.top_frame)
+    trans_btn.grid(row=0, column=1, padx=0, pady=0, sticky="ew")
+
+    export_btn = ExportButton(env.top_frame)
+    export_btn.grid(row=0, column=2, padx=0, pady=0, sticky="ew")
 
 
 @cli.command
@@ -1341,8 +1415,8 @@ def import_json(filename: str):
     visitor = LayoutImportVisitor(dotfile)
     x0, y0, x1, y1 = visitor.layout.bb
     width, height = x1 - x0, y1 - y0
-    runtime.canvas.config(width=width, height=height)
-    runtime.tree.resize(width, height)
+    # runtime.canvas.config(width=width, height=height)
+    # runtime.tree.resize(width, height)
     for dotnode in visitor.nodes:
         if isinstance(dotnode, Cluster):
             x0, y0, x1, y1 = dotnode.bb
