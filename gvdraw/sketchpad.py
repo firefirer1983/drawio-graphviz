@@ -5,10 +5,18 @@ import pprint
 import logging
 import textwrap
 from io import StringIO
+from gvdraw.spline import draw_smooth_curve
+from gvdraw.bezier import cubic_bezier_points
 from functools import wraps, partial
 from dataclasses import InitVar, dataclass, field
 from collections import defaultdict, deque
-from gvdraw.dpi import dpi72todpi96, array72todpi96, inch2pixel, tuples72todpi96, tuple72todpi96
+from gvdraw.dpi import (
+    dpi72todpi96,
+    array72todpi96,
+    inch2pixel,
+    tuples72todpi96,
+    tuple72todpi96,
+)
 from typing import (
     Callable,
     Deque,
@@ -25,13 +33,10 @@ from typing import (
 
 from transitions.extensions import HierarchicalGraphMachine
 from transitions.extensions.nesting import NestedState
-from gvdraw.dpi import dpi72todpi96
-from graphviz import dot
 import graphviz
 
 # from tkinter import *
 import tkinter as tk
-from tkinter import simpledialog
 from tkinter import ttk
 
 Pos = Tuple[int, int]
@@ -209,7 +214,9 @@ class NodeWidget:
             fill="",
             outline="black",
         )
-        logger.info(f"[NODE] ({self.node.left}, {self.node.top}) {self.node.right - self.node.left}x{self.node.bottom - self.node.top}")
+        logger.info(
+            f"[NODE] ({self.node.left}, {self.node.top}) {self.node.right - self.node.left}x{self.node.bottom - self.node.top}"
+        )
         self.label_id = runtime.canvas.create_text(
             node.x + NODE_LABEL_X_OFFSET,
             node.y + NODE_LABEL_Y_OFFSET,
@@ -265,7 +272,8 @@ class Pole:
     West: int = 3
 
 
-class EditState:
+class CanvasMode:
+    Browse = "Browse"
     Draw = "Draw"
     Moving = "Moving"
     Transition = "Transition"
@@ -320,6 +328,10 @@ class Region:
         self.x += int(hoffset)
         self.y += int(voffset)
         return self
+
+    def resize(self, width: int, height: int):
+        self.width = width
+        self.height = height
 
     def __repr__(self) -> str:
         return f"Region<({self.x},{self.y}) {self.width}x{self.height}>"
@@ -426,11 +438,12 @@ class RuntimeEnv:
     root: tk.Tk
     canvas: tk.Canvas
     tree: Node
-    edit: str = EditState.Draw
+    canvas_mode: str = CanvasMode.Browse
     source_port: Optional[Port] = None
     target_port: Optional[Port] = None
     box: Optional[int] = None
     line: Optional[int] = None
+    scale_factor: float = 1.0
 
     def run(self):
         return self.root.mainloop()
@@ -510,7 +523,7 @@ def get_parent(node: Node) -> Node:
 button_region_registry: List[Region] = list()
 
 
-class CanvasButton:
+class CanvasButtonBase:
     def __init__(self, canvas, x, y, width, height, text):
         button_region_registry.append(Region(x, y, width, height))
         self.canvas = canvas
@@ -546,63 +559,63 @@ class CanvasButton:
         pass
 
 
-class MoveButton(CanvasButton):
+class MoveButton(CanvasButtonBase):
     def __init__(self, canvas, x, y, width, height):
         super().__init__(canvas, x, y, width, height, "move")
 
     def on_press(self, event):
-        logger.info(f"{runtime.edit} @{self.__class__.__name__} on press!")
-        if runtime.edit == EditState.Moving:
-            runtime.edit = EditState.Draw
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+        if runtime.canvas_mode == CanvasMode.Moving:
+            runtime.canvas_mode = CanvasMode.Browse
         else:
-            runtime.edit = EditState.Moving
+            runtime.canvas_mode = CanvasMode.Moving
 
-        if runtime.edit == EditState.Moving:
+        if runtime.canvas_mode == CanvasMode.Moving:
             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
         return "break"
 
     def on_release(self, event):
-        logger.info(f"{runtime.edit} @{self.__class__.__name__} on release!")
-        if runtime.edit != EditState.Moving:
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on release!")
+        if runtime.canvas_mode != CanvasMode.Moving:
             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
         return "break"
 
 
-class TransitionButton(CanvasButton):
+class TransitionButton(CanvasButtonBase):
     def __init__(self, canvas, x, y, width, height):
         super().__init__(canvas, x, y, width, height, "trans")
 
     def on_press(self, event):
-        logger.info(f"{runtime.edit} @{self.__class__.__name__} on press!")
-        if runtime.edit == EditState.Transition:
-            runtime.edit = EditState.Draw
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
+        if runtime.canvas_mode == CanvasMode.Transition:
+            runtime.canvas_mode = CanvasMode.Browse
         else:
-            runtime.edit = EditState.Transition
+            runtime.canvas_mode = CanvasMode.Transition
 
-        if runtime.edit == EditState.Transition:
+        if runtime.canvas_mode == CanvasMode.Transition:
             self.canvas.itemconfig(self.rect, fill="yellow")  # 改变颜色以模拟按下效果
             PortVisitor(True).visit(runtime.tree)
         return "break"
 
     def on_release(self, event):
-        logger.info(f"{runtime.edit} @ {self.__class__.__name__} on release!")
-        if runtime.edit != EditState.Transition:
+        logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
+        if runtime.canvas_mode != CanvasMode.Transition:
             self.canvas.itemconfig(self.rect, fill=self.origin_color)  # 恢复原始颜色
             PortVisitor(False).visit(runtime.tree)
         return "break"
 
 
-class ExportButton(CanvasButton):
+class ExportButton(CanvasButtonBase):
     def __init__(self, canvas, x, y, width, height):
         super().__init__(canvas, x, y, width, height, "export")
 
     def on_press(self, event):
-        logger.info(f"{runtime.edit} @{self.__class__.__name__} on press!")
+        logger.info(f"{runtime.canvas_mode} @{self.__class__.__name__} on press!")
         logger.info(f"Start Exporting ...")
         return "break"
 
     def on_release(self, event):
-        logger.info(f"{runtime.edit} @ {self.__class__.__name__} on release!")
+        logger.info(f"{runtime.canvas_mode} @ {self.__class__.__name__} on release!")
 
 
 @dataclass
@@ -644,6 +657,47 @@ class EventRegistry:
 
     def on_click(self, event):
         mp.pos = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
+
+
+class BrowseCanvasHandler(EventRegistry):
+    def on_click(self, event):
+        mp.pos = runtime.canvas.canvasx(event.x), runtime.canvas.canvasy(event.y)
+
+    def on_move(self, event):
+        if mp.x is not None and mp.y is not None:
+            dx = runtime.canvas.canvasx(event.x) - mp.x
+            dy = runtime.canvas.canvasy(event.y) - mp.y
+            runtime.canvas.move("all", dx, dy)
+            mp.x = runtime.canvas.canvasx(event.x)
+            mp.y = runtime.canvas.canvasy(event.y)
+
+    def on_release(self, event):
+        pass
+
+    def on_roll(self, event):
+        """
+        Zoom Up/Down
+        """
+        if event.num == 5 or event.delta == -120:  # 向下滚动或 Linux 下滚
+            factor = 0.9
+        elif event.num == 4 or event.delta == 120:  # 向上滚动或 Linux 上滚
+            factor = 1.1
+        else:
+            return
+
+        runtime.scale_factor *= factor
+
+        # 缩放围绕鼠标指针进行
+        x = runtime.canvas.canvasx(event.x)
+        y = runtime.canvas.canvasy(event.y)
+
+        runtime.canvas.scale("all", x, y, factor, factor)
+
+        # 更新所有对象的坐标
+        for item in runtime.canvas.find_all():
+            coords = runtime.canvas.coords(item)
+            new_coords = [coord * factor for coord in coords]
+            runtime.canvas.coords(item, *new_coords)
 
 
 class MovingCanvasHandler(EventRegistry):
@@ -783,19 +837,25 @@ def button_event_bypass(f: Callable):
 
 @button_event_bypass
 def on_click(event):
-    eventhandler = event_registry[runtime.edit.lower()]
+    eventhandler = event_registry[runtime.canvas_mode.lower()]
+    eventhandler.on_click(event)
+
+
+@button_event_bypass
+def on_roll(event):
+    eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_click(event)
 
 
 @button_event_bypass
 def on_move(event):
-    eventhandler = event_registry[runtime.edit.lower()]
+    eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_move(event)
 
 
 @button_event_bypass
 def on_release(event):
-    eventhandler = event_registry[runtime.edit.lower()]
+    eventhandler = event_registry[runtime.canvas_mode.lower()]
     eventhandler.on_release(event)
 
 
@@ -979,7 +1039,7 @@ class Cluster:
     edges: List[int] = field(init=False)
     nodes: List[int] = field(init=False)
     subgraphs: List[int] = field(init=False)
-    
+
     dotobj: InitVar[dict]
 
     def __post_init__(self, dotobj: dict):
@@ -1101,28 +1161,29 @@ class DotEdge:
         self.head_lp = dotobj.get("head_lp", "")
         self.taillabel = dotobj.get("taillabel", "")
         self.headlabel = dotobj.get("headlabel", "")
+        self.pos = [(pos[1], pos[0]) for pos in self.pos]
 
 
 @dataclass
 class DotLayout:
-    name: str =  field(init=False)
-    directed: bool =  field(init=False)
+    name: str = field(init=False)
+    directed: bool = field(init=False)
     strict: bool = field(init=False)
     bb: List[int] = field(init=False)
-    color: str =  field(init=False)
-    compound: bool =  field(init=False)
-    directed: bool =  field(init=False)
+    color: str = field(init=False)
+    compound: bool = field(init=False)
+    directed: bool = field(init=False)
     fillcolor: str = field(init=False)
-    label: str =  field(init=False)
+    label: str = field(init=False)
     lheight: int = field(init=False)
     lp: List[int] = field(init=False)
-    lwidth: int =  field(init=False)
-    nodesep: int =  field(init=False)
+    lwidth: int = field(init=False)
+    nodesep: int = field(init=False)
     # rank: str =  field(init=False)
-    rankdir: str =  field(init=False)
+    rankdir: str = field(init=False)
     strict: bool = field(init=False)
-    style: str =  field(init=False)
-    _subgraph_cnt: int =  field(init=False)
+    style: str = field(init=False)
+    _subgraph_cnt: int = field(init=False)
     objects: List[Union[Cluster, ClusterRoot, DotNode]] = field(init=False)
     edges: List[DotEdge] = field(init=False)
 
@@ -1146,13 +1207,13 @@ class DotLayout:
         self.lheight = inch2pixel(dotobj["lheight"])
         self._subgraph_cnt = dotobj["_subgraph_cnt"]
         self.objects = []
-        
+
         for obj in dotobj["objects"]:
             objtype = get_dotnode_type(obj)
             self.objects.append(objtype(obj))
-            
+
         self.edges = [DotEdge(edg) for edg in dotobj["edges"]]
-    
+
 
 class LayoutImportVisitor:
     def __init__(self, layout: dict, sep: str = "."):
@@ -1249,6 +1310,10 @@ def prepare_layout(env: RuntimeEnv):
     env.canvas.bind("<ButtonPress-1>", on_click)
     env.canvas.bind("<B1-Motion>", on_move)
     env.canvas.bind("<ButtonRelease-1>", on_release)
+    env.canvas.bind("<MouseWheel>", on_roll)  # Windows 和 MacOS
+    env.canvas.bind("<Button-4>", on_roll)  # Linux 滚轮上滚
+    env.canvas.bind("<Button-5>", on_roll)  # Linux 滚轮下滚
+
     MoveButton(env.canvas, 0, 0, BTN_WIDTH, BTN_HEIGHT)
     TransitionButton(env.canvas, BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
     ExportButton(env.canvas, 2 * BTN_OFFSET, 0, BTN_WIDTH, BTN_HEIGHT)
@@ -1264,8 +1329,9 @@ def start():
 @click.argument("filename", type=str)
 def import_json(filename: str):
     import pprint
+
     prepare_layout(runtime)
-    
+
     with open(filename, "r", encoding="utf8") as f:
         dat = f.read()
         dotfile = json.loads(dat)
@@ -1273,10 +1339,14 @@ def import_json(filename: str):
     pprint.pprint(dotfile)
 
     visitor = LayoutImportVisitor(dotfile)
+    x0, y0, x1, y1 = visitor.layout.bb
+    width, height = x1 - x0, y1 - y0
+    runtime.canvas.config(width=width, height=height)
+    runtime.tree.resize(width, height)
     for dotnode in visitor.nodes:
         if isinstance(dotnode, Cluster):
             x0, y0, x1, y1 = dotnode.bb
-            width, height = x1 -x0, y1 - y0
+            width, height = x1 - x0, y1 - y0
             node = Node(x0, y0, width, height)
             _, node.label = dotnode.name.split("cluster_")
             node.draw()
@@ -1287,7 +1357,7 @@ def import_json(filename: str):
         elif isinstance(dotnode, DotNode):
             width, height = dotnode.width, dotnode.height
             cx, cy = dotnode.pos
-            x0, y0 = cx - width//2, cy - height // 2
+            x0, y0 = cx - width // 2, cy - height // 2
             logger.info(f"{dotnode.name}: ({x0},{y0}) {width}x{height}")
             node = Node(x0, y0, width, height)
             node.label = dotnode.name
@@ -1296,12 +1366,13 @@ def import_json(filename: str):
             parent.add_child(node)
         else:
             logger.warning(f"无法处理的节点: {dotnode}")
-            
-        
-    # for e in visitor.edges:
-    #     print(e)
-    
+
+    for edg in visitor.edges:
+        cubic_bezier_points(runtime.canvas, edg.pos)
+        logger.info(f"{edg}")
+
     runtime.run()
+
 
 if __name__ == "__main__":
     cli()

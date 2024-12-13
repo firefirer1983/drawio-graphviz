@@ -112,6 +112,11 @@ transitions = [
         unless=["not_c1", "not_c1_again"],
     ),
     Transition(
+        source=NS(States.B, States.C, States.C1),
+        dest=NS(States.B, States.C, States.C1),
+        conditions=["is_c1"],
+    ),
+    Transition(
         source=NS(States.B, States.C, States.C1), dest=NS(States.B, States.C, States.C2)
     ),
     Transition(source=NS(States.B, States.C, States.C2), dest=NS(States.B, States.B1)),
@@ -131,6 +136,7 @@ machine = HierarchicalGraphMachine(
 
 def draw2json(machine, filename: str):
     import pprint
+
     model = machine.model
     machine.show_conditions = False
     machine.show_state_attributes = False
@@ -139,9 +145,8 @@ def draw2json(machine, filename: str):
 
     graph = model.get_graph()
     graph.attr(rankdir="BT")
-    graph.draw(f"{filename}.json0", prog="dot")
+    graph.draw(f"{filename}.json", prog="dot")
     graph.draw(f"{filename}.png", prog="dot")
-    
 
 
 def main():
