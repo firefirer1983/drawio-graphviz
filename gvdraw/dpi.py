@@ -29,9 +29,9 @@ def dpi72todpi96(pixels: str) -> int:
 
 def tuples72todpi96(tuples: str) -> List[Tuple[int, int]]:
     result = list()
-    for pos in tuples.split(","):
+    for pos in tuples.split(" "):
         try:
-            x, y = pos.split(" ")
+            *_, x, y = pos.split(",")
             x = int(float(x) * 4) // 3
             y = int(float(y) * 4) // 3
             result.append((x, y))

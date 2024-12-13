@@ -1212,7 +1212,6 @@ class DotEdge:
         self.head_lp = dotobj.get("head_lp", "")
         self.taillabel = dotobj.get("taillabel", "")
         self.headlabel = dotobj.get("headlabel", "")
-        self.pos = [(pos[1], pos[0]) for pos in self.pos]
 
 
 @dataclass
@@ -1442,7 +1441,8 @@ def import_json(filename: str):
             logger.warning(f"无法处理的节点: {dotnode}")
 
     for edg in visitor.edges:
-        cubic_bezier_points(runtime.canvas, edg.pos)
+        draw_smooth_curve(runtime.canvas, edg.pos)
+        # cubic_bezier_points(runtime.canvas, edg.pos)
         logger.info(f"{edg}")
 
     runtime.run()
